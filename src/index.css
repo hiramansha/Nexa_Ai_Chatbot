@@ -767,3 +767,107 @@ button:disabled {
   .tool-pill { padding: 8px; }
   .composer-spacer { min-width: 0; }
 }
+
+
+/* ===== Nexa AI layout fixes ===== */
+
+.workspace {
+  min-height: 0;
+  min-width: 0;
+}
+
+.sidebar {
+  min-height: 0;
+}
+
+.recent-list {
+  flex: 1;
+  min-height: 70px;
+  scrollbar-width: thin;
+  scrollbar-color: #6944a8 transparent;
+}
+
+.main-panel {
+  min-height: 0;
+  min-width: 0;
+}
+
+.welcome {
+  flex: 1;
+  min-height: 0;
+  margin: 14px auto 0;
+  padding: 14px 0 190px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.suggestions {
+  align-items: stretch;
+}
+
+.suggestion {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.composer {
+  z-index: 5;
+  max-width: calc(100% - 52px);
+}
+
+.composer textarea {
+  resize: none;
+  max-width: 100%;
+}
+
+.chat-view {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.message-content {
+  overflow-wrap: anywhere;
+}
+
+@media (max-height: 760px) and (min-width: 761px) {
+  .welcome {
+    padding-top: 8px;
+    padding-bottom: 185px;
+  }
+
+  .orb {
+    width: 82px;
+    height: 82px;
+    margin-bottom: 18px;
+  }
+
+  .orb-core {
+    width: 46px;
+    height: 46px;
+  }
+
+  .subtitle {
+    margin-bottom: 22px;
+  }
+
+  .suggestion {
+    min-height: 115px;
+    padding: 14px;
+  }
+}
+
+@media (max-width: 760px) {
+  .welcome {
+    flex: 1;
+    padding: 18px 0 245px;
+  }
+
+  .composer {
+    max-width: none;
+  }
+
+  .recent-list {
+    flex: 1;
+    min-height: 60px;
+  }
+}
