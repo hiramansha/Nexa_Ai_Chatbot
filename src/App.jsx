@@ -5,7 +5,7 @@ import {
   Crown, MessageCircle, Code2, Plane, Lightbulb, Paperclip,
   Image as ImageIcon, Brain, Mic, Send, Menu, X, ChevronDown,
   MoreHorizontal, Sun, Moon, Copy, Check, RefreshCw, Trash2,
-  LogOut
+  PanelLeftClose, LogOut
 } from "lucide-react";
 
 const STORAGE_KEY = "nexa-ai-chats-v1";
@@ -13,21 +13,21 @@ const STORAGE_KEY = "nexa-ai-chats-v1";
 const suggestions = [
   {
     title: "Explain Code",
-    description: "Learn coding step by step.",
+    description: "Can you explain this code step by step?",
     icon: Code2,
-    prompt: "Explain JavaScript with a simple example."
+    prompt: "Explain how JavaScript works and show me a simple example."
   },
   {
     title: "Plan a Trip",
-    description: "Create a budget-friendly itinerary.",
+    description: "Create a 5-day budget-friendly itinerary.",
     icon: Plane,
-    prompt: "Create a 5-day budget-friendly trip plan for Lahore."
+    prompt: "Create a detailed 5-day budget-friendly travel itinerary for Lahore."
   },
   {
-    title: "Write Something",
-    description: "Draft a professional message or email.",
+    title: "Brainstorm Ideas",
+    description: "Let's turn an idea into something amazing.",
     icon: Lightbulb,
-    prompt: "Write a professional email asking my teacher for feedback."
+    prompt: "Give me 5 creative ideas for a modern technology project."
   }
 ];
 
@@ -53,120 +53,26 @@ function readChats() {
   }
 }
 
-/* Detect Urdu script, Roman Urdu, or English */
-function detectLanguage(prompt) {
-  if (/[\u0600-\u06FF]/.test(prompt)) return "urdu";
-
-  const romanUrdu =
-    /\b(assalam|alaikum|walaikum|salam|kya|kesy|kaise|krdo|kardo|kro|mujhe|mujhy|mera|meri|main|mein|hai|hain|ho|hona|chahiye|btao|batao|likho|likhdo|urdu|acha|achha|nhi|nahin|kyun|kyu|aur|ap|aap|ka|ki|ke|liye|bhi|madad|jawab|sawal|shukriya|karna|kren|bnao|samjhao|samjha|raha|rahi|rha|rhi|konsa|konsi|kitna|kahan|kab|theek|thik|hai\?)\b/i;
-
-  return romanUrdu.test(prompt) ? "roman-urdu" : "english";
-}
-
-/* Rule-based demo responses.
-   Connect a real AI backend for intelligent, open-ended answers. */
 function demoReply(prompt) {
-  const language = detectLanguage(prompt);
-  const text = prompt.toLowerCase().trim();
+  const text = prompt.toLowerCase();
 
-  const has = (...words) =>
-    words.some((word) => text.includes(word));
-
-  const greeting =
-    /^(hi|hello|hey|salam|assalam|assalam o alaikum|asalam o alaikum|good morning|good afternoon|good evening|السلام علیکم|ہیلو)[!.،\s]*$/i.test(text);
-
-  if (greeting) {
-    if (language === "urdu") {
-      return "وعلیکم السلام! 😊\n\nنیکسا اے آئی میں خوش آمدید۔ آج میں آپ کی کس طرح مدد کر سکتا ہوں؟";
-    }
-
-    if (language === "roman-urdu") {
-      return "Wa Alaikum Assalam! 😊\n\nNexa AI mein khush aamdeed! Aaj main aapki kis tarah madad kar sakta hoon?";
-    }
-
-    return "Hello! 👋 Welcome to Nexa AI. How can I help you today?";
+  if (text.includes("javascript") || text.includes("code")) {
+    return "Let's break it down step by step.\n\n1. **Understand the goal:** Identify what the code should accomplish.\n2. **Divide the problem:** Separate it into smaller, manageable tasks.\n3. **Write the logic:** Use variables, functions, and conditions as needed.\n4. **Test the result:** Try different inputs and handle possible errors.\n\nShare your code with me to get a more specific explanation.\n\n*Demo response: connect a secure AI API to enable real AI-generated answers.*";
   }
 
-  if (has("thank you", "thanks", "thanku", "shukriya", "sukriya", "شکریہ")) {
-    if (language === "urdu") {
-      return "آپ کا خیرمقدم ہے! 😊 اگر آپ کو مزید مدد چاہیے تو ضرور بتائیں۔";
-    }
-    if (language === "roman-urdu") {
-      return "Aapka khair maqdam hai! 😊 Mazeed madad chahiye ho to zaroor batayein.";
-    }
-    return "You're welcome! 😊 Let me know if you need help with anything else.";
+  if (text.includes("trip") || text.includes("travel") || text.includes("lahore")) {
+    return "Here's a simple way to organise your trip:\n\n**Day 1:** Explore the historic city centre.\n\n**Day 2:** Visit cultural landmarks and local markets.\n\n**Day 3:** Discover museums, gardens, and local food.\n\n**Day 4:** Explore a new neighbourhood and enjoy local experiences.\n\n**Day 5:** Keep the day flexible for shopping and your return journey.\n\nSet a daily budget for transport, meals, and entry tickets before you travel.\n\n*Demo response: verify current opening hours, prices, and travel information before your trip.*";
   }
 
-  const writingTask = has(
-    "write a message", "write message", "draft a message",
-    "write an email", "draft an email", "compose an email",
-    "write a letter", "draft a letter", "professional email",
-    "professional message", "reply to", "message bna",
-    "message bana", "msg bna", "msg bana", "email likh",
-    "letter likh", "paigham likh", "پیغام لکھ", "ای میل لکھ", "خط لکھ"
-  );
-
-  if (writingTask) {
-    if (language === "urdu") {
-      return "**پیغام کا مسودہ**\n\nمحترم/محترمہ،\n\n[یہاں اپنے پیغام کی تفصیلات لکھیں۔]\n\nآپ کے وقت اور تعاون کا شکریہ۔\n\nنیک تمنائیں،\n[آپ کا نام]";
-    }
-
-    if (language === "roman-urdu") {
-      return "**Message Draft**\n\nAssalam o Alaikum,\n\n[Apne message ka maqsad aur zaroori tafseel yahan likhein.]\n\nAapke waqt aur taawun ka shukriya.\n\nBest regards,\n[Apna naam]";
-    }
-
-    return "**Subject:** [Your subject]\n\nDear [Name],\n\nI hope you are doing well.\n\n[Write the purpose of your message here, including any important details.]\n\nThank you for your time and consideration.\n\nBest regards,\n[Your Name]\n\n*Share the recipient and purpose for a more personalized draft.*";
-  }
-
-  const coding = has(
-    "javascript", "react", "html", "css", "python",
-    "programming", "coding", "code", "function", "error",
-    "bug", "api", "backend", "frontend"
-  );
-
-  if (coding) {
-    if (language === "urdu") {
-      return "میں آپ کے پروگرامنگ سوال میں مدد کر سکتا ہوں۔\n\n1. اپنا کوڈ شیئر کریں۔\n2. بتائیں کہ آپ کیا بنانا چاہتے ہیں۔\n3. اگر کوئی ایرر ہے تو اس کا پیغام بھی بھیجیں۔\n\nاس کے بعد ہم مسئلے کو مرحلہ وار سمجھیں گے۔";
-    }
-
-    if (language === "roman-urdu") {
-      return "Main aapke coding question mein madad kar sakta hoon!\n\n1. Apna code share karein.\n2. Batayein ke aap kya banana chahte hain.\n3. Agar error aa raha hai to uska exact message bhejein.\n\nPhir hum problem ko step by step samjhenge.";
-    }
-
-    return "I can help with your coding question!\n\n1. Share the relevant code.\n2. Explain what you want it to do.\n3. Include the exact error message, if there is one.\n\nI'll help you understand the issue and work through a solution.";
-  }
-
-  const explanation = has(
-    "explain", "what is", "meaning", "how does",
-    "samjhao", "matlab", "kya hota", "کیا ہے", "مطلب"
-  );
-
-  if (explanation) {
-    if (language === "urdu") {
-      return "میں اس موضوع کو آسان الفاظ میں سمجھانے میں مدد کر سکتا ہوں۔\n\nبراہِ کرم اپنے سوال یا موضوع کی مکمل تفصیل بتائیں تاکہ میں متعلقہ وضاحت اور مثال دے سکوں۔";
-    }
-
-    if (language === "roman-urdu") {
-      return "Main aapko is topic ko asaan alfaaz mein samjha sakta hoon.\n\nApna poora sawal ya topic share karein, taake main relevant explanation aur example de sakoon.";
-    }
-
-    return "I'd be happy to explain this topic clearly.\n\nShare the specific concept or question, and I can help break it down into simpler steps with an example.";
-  }
-
-  if (language === "urdu") {
-    return "آپ کے سوال کا شکریہ!\n\nمیں آپ کی مدد کرنا چاہتا ہوں۔ براہِ کرم اپنے سوال یا مطلوبہ کام کی تھوڑی مزید تفصیل بتائیں تاکہ میں آپ کو زیادہ متعلقہ جواب دے سکوں۔";
-  }
-
-  if (language === "roman-urdu") {
-    return "Aapke sawal ka shukriya!\n\nMain aapki madad karna chahta hoon. Apne sawal ya kaam ki thori si tafseel bata dein, taake main aapko zyada relevant jawab de sakoon.";
-  }
-
-  return "Thanks for your question!\n\nI'd like to help. Please share a little more detail about what you want to know or accomplish so I can give you a more relevant answer.\n\n*Note: Nexa AI is currently running in demo mode. Connect a real AI API for intelligent, question-specific responses.*";
+  return `Great question! Let's work through this together.\n\n**Your question:** ${prompt}\n\nHere's a useful approach:\n\n1. **Define your goal** — decide what you want to achieve.\n2. **Explore your options** — consider a few different approaches.\n3. **Create a plan** — break the next steps into manageable tasks.\n4. **Review and improve** — test your ideas and refine the result.\n\nThis is a sample response from the Nexa AI frontend prototype. Connect a real AI API to receive answers generated specifically for your questions.`;
 }
 
 export default function App() {
   const [chats, setChats] = useState(readChats);
-  const [activeId, setActiveId] = useState(() => readChats()[0]?.id || null);
+  const [activeId, setActiveId] = useState(() => {
+    const saved = readChats();
+    return saved[0]?.id || null;
+  });
   const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -177,8 +83,8 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [showMenu, setShowMenu] = useState(false);
 
-  const bottomRef = useRef(null);
   const textareaRef = useRef(null);
+  const bottomRef = useRef(null);
   const activeChat = chats.find((chat) => chat.id === activeId);
   const messages = activeChat?.messages || [];
 
@@ -188,7 +94,7 @@ export default function App() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, thinking]);
+  }, [messages.length]);
 
   function updateChat(id, updater) {
     setChats((previous) =>
@@ -215,7 +121,9 @@ export default function App() {
   function deleteChat(id) {
     const remaining = chats.filter((chat) => chat.id !== id);
     setChats(remaining);
-    if (activeId === id) setActiveId(remaining[0]?.id || null);
+    if (activeId === id) {
+      setActiveId(remaining[0]?.id || null);
+    }
   }
 
   function renameChat(chat) {
@@ -229,7 +137,7 @@ export default function App() {
     }));
   }
 
-  function sendMessage(text = input) {
+  async function sendMessage(text = input) {
     const prompt = text.trim();
     if (!prompt || thinking) return;
 
@@ -240,6 +148,7 @@ export default function App() {
       currentChat = makeChat();
       chatId = currentChat.id;
       setActiveId(chatId);
+      setChats((previous) => [currentChat, ...previous]);
     }
 
     const userMessage = {
@@ -248,60 +157,107 @@ export default function App() {
       content: prompt
     };
 
-    const assistantMessage = {
-      id: makeId(),
-      role: "assistant",
-      content: demoReply(prompt)
-    };
+    const previousMessages = currentChat.messages
+      .filter((message) => ["user", "assistant"].includes(message.role))
+      .map(({ role, content }) => ({ role, content }));
 
-    const updatedChat = {
-      ...currentChat,
-      title: currentChat.messages.length === 0
+    updateChat(chatId, (chat) => ({
+      ...chat,
+      title: chat.messages.length === 0
         ? prompt.slice(0, 36) + (prompt.length > 36 ? "…" : "")
-        : currentChat.title,
+        : chat.title,
       updatedAt: Date.now(),
-      messages: [...currentChat.messages, userMessage, assistantMessage]
-    };
+      messages: [...chat.messages, userMessage]
+    }));
 
-    setChats((previous) => [
-      updatedChat,
-      ...previous.filter((chat) => chat.id !== chatId)
-    ]);
-
-    setActiveId(chatId);
     setInput("");
-    setThinking(false);
+    setThinking(true);
     setNotice("");
     setSidebarOpen(false);
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [...previousMessages, { role: "user", content: prompt }]
+        })
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `AI request failed (${response.status}).`);
+      }
+      if (typeof data.reply !== "string" || !data.reply.trim()) {
+        throw new Error("The AI returned an empty response.");
+      }
+
+      const assistantMessage = {
+        id: makeId(),
+        role: "assistant",
+        content: data.reply
+      };
+
+      updateChat(chatId, (chat) => ({
+        ...chat,
+        updatedAt: Date.now(),
+        messages: [...chat.messages, assistantMessage]
+      }));
+    } catch (error) {
+      setNotice(error.message || "Unable to connect to Nexa AI. Please try again.");
+    } finally {
+      setThinking(false);
+    }
   }
 
-  function regenerate(messageIndex) {
-    if (thinking || !activeId) return;
-
-    const chat = chats.find((item) => item.id === activeId);
-    if (!chat) return;
-
-    const previousUserMessage = chat.messages
+  async function regenerate(messageIndex) {
+    const previousUserMessage = messages
       .slice(0, messageIndex)
       .reverse()
       .find((message) => message.role === "user");
 
-    if (!previousUserMessage) return;
+    if (!previousUserMessage || thinking || !activeId) return;
 
-    const answer = {
-      id: makeId(),
-      role: "assistant",
-      content: demoReply(previousUserMessage.content)
-    };
+    const chatId = activeId;
+    const history = messages
+      .slice(0, messageIndex)
+      .filter((message) => ["user", "assistant"].includes(message.role))
+      .map(({ role, content }) => ({ role, content }));
 
-    updateChat(activeId, (current) => ({
-      ...current,
-      updatedAt: Date.now(),
-      messages: [
-        ...current.messages.slice(0, messageIndex),
-        answer
-      ]
+    setThinking(true);
+    setNotice("");
+    updateChat(chatId, (chat) => ({
+      ...chat,
+      messages: chat.messages.slice(0, messageIndex)
     }));
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: history })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `AI request failed (${response.status}).`);
+      }
+      if (typeof data.reply !== "string" || !data.reply.trim()) {
+        throw new Error("The AI returned an empty response.");
+      }
+      updateChat(chatId, (chat) => ({
+        ...chat,
+        updatedAt: Date.now(),
+        messages: [...chat.messages, {
+          id: makeId(),
+          role: "assistant",
+          content: data.reply
+        }]
+      }));
+    } catch (error) {
+      setNotice(error.message || "Unable to regenerate the response.");
+    } finally {
+      setThinking(false);
+    }
   }
 
   async function copyMessage(message) {
@@ -334,7 +290,11 @@ export default function App() {
     <div className={`app ${lightMode ? "light-mode" : ""}`}>
       <div className="browser">
         <div className="browser-bar">
-          <div className="traffic"><span /><span /><span /></div>
+          <div className="traffic">
+            <span />
+            <span />
+            <span />
+          </div>
           <div className="address">🔒 &nbsp; nexaai.app</div>
           <button
             className="icon-btn"
@@ -353,8 +313,12 @@ export default function App() {
                 <div className="brand-name">Nexa <span>AI</span></div>
                 <div className="brand-caption">AI Assistant</div>
               </div>
-              <button className="icon-btn" style={{ marginLeft: "auto" }}
-                onClick={() => setSidebarOpen(false)} title="Close sidebar">
+              <button
+                className="icon-btn"
+                style={{ marginLeft: "auto" }}
+                onClick={() => setSidebarOpen(false)}
+                title="Close sidebar"
+              >
                 <X size={18} />
               </button>
             </div>
@@ -367,8 +331,11 @@ export default function App() {
               <History size={19} />
               <span>Recent</span>
               <span className="spacer" />
-              <button className="icon-btn" title="Search conversations"
-                onClick={() => setSearchOpen((value) => !value)}>
+              <button
+                className="icon-btn"
+                title="Search conversations"
+                onClick={() => setSearchOpen((value) => !value)}
+              >
                 <Search size={18} />
               </button>
             </div>
@@ -381,8 +348,11 @@ export default function App() {
                 placeholder="Search conversations..."
                 aria-label="Search conversations"
                 style={{
-                  width: "100%", padding: 11, color: "inherit",
-                  background: "#151a35", border: "1px solid var(--border)",
+                  width: "100%",
+                  padding: 11,
+                  color: "inherit",
+                  background: "#151a35",
+                  border: "1px solid var(--border)",
                   borderRadius: 10
                 }}
               />
@@ -390,55 +360,86 @@ export default function App() {
 
             <div className="recent-list">
               {visibleChats.map((chat) => (
-                <div key={chat.id}
-                  className={`recent-item ${chat.id === activeId ? "active" : ""}`}>
-                  <button className="icon-btn" onClick={() => openChat(chat.id)}
-                    title="Open conversation">
+                <div
+                  key={chat.id}
+                  className={`recent-item ${chat.id === activeId ? "active" : ""}`}
+                >
+                  <button
+                    className="icon-btn"
+                    onClick={() => openChat(chat.id)}
+                    title="Open conversation"
+                  >
                     <MessageCircle size={17} />
                   </button>
-                  <button onClick={() => openChat(chat.id)} style={{
-                    flex: 1, minWidth: 0, textAlign: "left", border: 0,
-                    padding: 0, background: "transparent", color: "inherit"
-                  }}>
+
+                  <button
+                    onClick={() => openChat(chat.id)}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      textAlign: "left",
+                      border: 0,
+                      padding: 0,
+                      background: "transparent",
+                      color: "inherit"
+                    }}
+                  >
                     <span className="recent-title">{chat.title}</span>
                     <span className="recent-date">
                       {new Date(chat.updatedAt).toLocaleDateString()}
                     </span>
                   </button>
-                  <button className="icon-btn" title="Rename conversation"
-                    onClick={() => renameChat(chat)}>
+
+                  <button
+                    className="icon-btn"
+                    title="Rename conversation"
+                    onClick={() => renameChat(chat)}
+                  >
                     <MoreHorizontal size={17} />
                   </button>
-                  <button className="icon-btn" title="Delete conversation"
-                    onClick={() => deleteChat(chat.id)}>
+                  <button
+                    className="icon-btn"
+                    title="Delete conversation"
+                    onClick={() => deleteChat(chat.id)}
+                  >
                     <Trash2 size={15} />
                   </button>
                 </div>
               ))}
-              {visibleChats.length === 0 &&
-                <div className="empty-history">No matching conversations.</div>}
+
+              {visibleChats.length === 0 && (
+                <div className="empty-history">No matching conversations.</div>
+              )}
             </div>
 
             <div className="sidebar-bottom">
-              <button className="side-link"
-                onClick={() => setNotice("Settings will be available in a future update.")}>
+              <button
+                className="side-link"
+                onClick={() => setNotice("Theme and chat preferences are available in this frontend prototype.")}
+              >
                 <Settings size={19} /> Settings
               </button>
-              <button className="side-link"
-                onClick={() => setNotice("Nexa AI demo. Real AI integration is the next step.")}>
+              <button
+                className="side-link"
+                onClick={() => setNotice("Nexa AI frontend prototype — backend setup comes next.")}
+              >
                 <CircleHelp size={19} /> Help & Support
               </button>
+
               <div className="upgrade">
                 <div className="upgrade-heading">
                   <span className="upgrade-icon"><Crown size={20} /></span>
                   Upgrade to Pro
                 </div>
                 <p>Explore a premium AI experience with more possibilities and powerful features.</p>
-                <button className="primary-btn"
-                  onClick={() => setNotice("Pro plans are a future feature. No payment is being taken.")}>
+                <button
+                  className="primary-btn"
+                  onClick={() => setNotice("Pro plans are a future feature. No payment is being taken.")}
+                >
                   Explore Pro <span>→</span>
                 </button>
               </div>
+
               <div className="profile">
                 <div className="avatar">N</div>
                 <div>
@@ -455,32 +456,46 @@ export default function App() {
           <main className="main-panel">
             <div className="top-controls">
               <div style={{ display: "flex", gap: 9, alignItems: "center" }}>
-                <button className="icon-btn mobile-menu" title="Open sidebar"
-                  onClick={() => setSidebarOpen((value) => !value)}>
+                <button
+                  className="icon-btn mobile-menu"
+                  title="Open sidebar"
+                  onClick={() => setSidebarOpen((value) => !value)}
+                >
                   <Menu size={20} />
                 </button>
-                <button className="model-select"
-                  onClick={() => setNotice("Real AI model selection requires an AI backend.")}>
+                <button
+                  className="model-select"
+                  onClick={() => setNotice("AI model selection will be enabled when the AI backend is connected.")}
+                >
                   <Sparkles size={17} /> Nexa AI <ChevronDown size={15} />
                 </button>
               </div>
+
               <div style={{ position: "relative" }}>
-                <button className="more-btn" title="More options"
-                  onClick={() => setShowMenu((value) => !value)}>
+                <button
+                  className="more-btn"
+                  title="More options"
+                  onClick={() => setShowMenu((value) => !value)}
+                >
                   <MoreHorizontal size={21} />
                 </button>
                 {showMenu && (
                   <div style={{
-                    position: "absolute", right: 0, top: 49, zIndex: 5,
-                    width: 180, padding: 8, border: "1px solid var(--border)",
-                    borderRadius: 12, background: "#121831",
+                    position: "absolute",
+                    right: 0,
+                    top: 49,
+                    zIndex: 5,
+                    width: 180,
+                    padding: 8,
+                    border: "1px solid var(--border)",
+                    borderRadius: 12,
+                    background: "#121831",
                     boxShadow: "0 10px 35px #0006"
                   }}>
-                    <button className="side-link" onClick={newChat}>
+                    <button className="side-link" onClick={() => { newChat(); setShowMenu(false); }}>
                       <Plus size={16} /> New conversation
                     </button>
-                    <button className="side-link"
-                      onClick={() => { setLightMode((value) => !value); setShowMenu(false); }}>
+                    <button className="side-link" onClick={() => { setLightMode(!lightMode); setShowMenu(false); }}>
                       {lightMode ? <Moon size={16} /> : <Sun size={16} />} Toggle theme
                     </button>
                   </div>
@@ -495,12 +510,16 @@ export default function App() {
                 </div>
                 <h1>Welcome to <span className="gradient-text">Nexa AI</span></h1>
                 <p className="subtitle">Your ideas. Your AI. Your next step.</p>
+
                 <div className="suggestions">
                   {suggestions.map((item) => {
                     const Icon = item.icon;
                     return (
-                      <button className="suggestion" key={item.title}
-                        onClick={() => sendMessage(item.prompt)}>
+                      <button
+                        className="suggestion"
+                        key={item.title}
+                        onClick={() => sendMessage(item.prompt)}
+                      >
                         <div className="suggestion-head">
                           <span className="suggestion-icon"><Icon size={22} /></span>
                           <span>{item.title}</span>
@@ -514,25 +533,32 @@ export default function App() {
             ) : (
               <div className="chat-view">
                 {messages.map((message, index) => (
-                  <div key={message.id}
-                    className={`message ${message.role === "user" ? "user" : ""}`}>
-                    {message.role === "assistant" &&
-                      <div className="message-avatar"><Sparkles size={18} /></div>}
+                  <div
+                    key={message.id}
+                    className={`message ${message.role === "user" ? "user" : ""}`}
+                  >
+                    {message.role === "assistant" && (
+                      <div className="message-avatar"><Sparkles size={18} /></div>
+                    )}
+
                     <div className="message-body">
                       <div className="message-role">
-                        {message.role === "user" ? "You" : "Nexa AI · Demo"}
+                        {message.role === "user" ? "You" : "Nexa AI"}
                       </div>
-                      <div className="message-content" style={{ whiteSpace: "pre-wrap" }}>
-                        {message.content}
-                      </div>
+                      <div className="message-content">{message.content}</div>
+
                       {message.role === "assistant" && (
                         <div className="message-actions">
                           <button onClick={() => copyMessage(message)}>
                             {copiedId === message.id
-                              ? <Check size={14} /> : <Copy size={14} />}
+                              ? <Check size={14} />
+                              : <Copy size={14} />}
                             {copiedId === message.id ? "Copied" : "Copy"}
                           </button>
-                          <button onClick={() => regenerate(index)} disabled={thinking}>
+                          <button
+                            onClick={() => regenerate(index)}
+                            disabled={thinking}
+                          >
                             <RefreshCw size={13} /> Regenerate
                           </button>
                         </div>
@@ -540,22 +566,43 @@ export default function App() {
                     </div>
                   </div>
                 ))}
+
+                {thinking && (
+                  <div className="message">
+                    <div className="message-avatar"><Sparkles size={18} /></div>
+                    <div className="message-body">
+                      <div className="message-role">Nexa AI</div>
+                      <div className="message-content">Preparing a sample response…</div>
+                    </div>
+                  </div>
+                )}
                 <div ref={bottomRef} />
               </div>
             )}
 
             {notice && (
               <div role="status" style={{
-                position: "absolute", top: 76, left: "50%",
-                transform: "translateX(-50%)", zIndex: 4,
-                width: "max-content", maxWidth: "90%", padding: "11px 15px",
-                color: "#e8dcff", background: "#27204a",
-                border: "1px solid #8c5cff75", borderRadius: 12, fontSize: 12
+                position: "absolute",
+                top: 76,
+                left: "50%",
+                transform: "translateX(-50%)",
+                zIndex: 4,
+                width: "max-content",
+                maxWidth: "90%",
+                padding: "11px 15px",
+                color: "#e8dcff",
+                background: "#27204a",
+                border: "1px solid #8c5cff75",
+                borderRadius: 12,
+                fontSize: 12
               }}>
                 {notice}
-                <button className="icon-btn"
+                <button
+                  className="icon-btn"
                   style={{ display: "inline-grid", marginLeft: 8, verticalAlign: "middle" }}
-                  onClick={() => setNotice("")} title="Dismiss">
+                  onClick={() => setNotice("")}
+                  title="Dismiss"
+                >
                   <X size={14} />
                 </button>
               </div>
@@ -571,28 +618,48 @@ export default function App() {
                 aria-label="Message Nexa AI"
                 rows={2}
               />
+
               <div className="composer-footer">
                 <div className="composer-tools">
-                  <button type="button" className="tool-pill"
-                    onClick={() => setNotice("File uploads are not implemented yet.")}>
+                  <button
+                    type="button"
+                    className="tool-pill"
+                    onClick={() => setNotice("File uploads will be added in a later frontend update.")}
+                  >
                     <Paperclip size={16} /> Attach
                   </button>
-                  <button type="button" className="tool-pill"
-                    onClick={() => setNotice("Image uploads are not implemented yet.")}>
+                  <button
+                    type="button"
+                    className="tool-pill"
+                    onClick={() => setNotice("Image uploads will be added in a later frontend update.")}
+                  >
                     <ImageIcon size={16} /> Images
                   </button>
-                  <button type="button" className="tool-pill"
-                    onClick={() => setNotice("Advanced reasoning requires a connected AI backend.")}>
+                  <button
+                    type="button"
+                    className={`tool-pill ${thinking ? "selected" : ""}`}
+                    onClick={() => setNotice("Advanced reasoning requires a connected AI backend.")}
+                  >
                     <Brain size={16} /> Thinking
                   </button>
                 </div>
+
                 <div className="composer-spacer" />
-                <button type="button" className="icon-btn" title="Voice input not enabled"
-                  onClick={() => setNotice("Voice input is planned for a future update.")}>
+
+                <button
+                  type="button"
+                  className="icon-btn"
+                  title="Voice input is not enabled yet"
+                  onClick={() => setNotice("Voice input is planned for a future update.")}
+                >
                   <Mic size={19} />
                 </button>
-                <button type="submit" className="send-btn"
-                  title="Send message" disabled={!input.trim() || thinking}>
+                <button
+                  type="submit"
+                  className="send-btn"
+                  title="Send message"
+                  disabled={!input.trim() || thinking}
+                >
                   <Send size={19} />
                 </button>
               </div>
