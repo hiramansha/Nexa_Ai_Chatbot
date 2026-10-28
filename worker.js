@@ -267,7 +267,8 @@ You are Nexa AI, a helpful, multilingual general-purpose assistant.
           image: imageDataUri,
           question,
           reasoning: false,
-          max_tokens: 1024
+          max_tokens: 1024,
+          stream: false
         });
       } else {
         model = textModel;
@@ -281,7 +282,6 @@ You are Nexa AI, a helpful, multilingual general-purpose assistant.
         });
       }
 
-      // Diagnostic logs: do not log the uploaded image.
       console.log("AI model:", model);
       console.log("AI output type:", typeof result);
       console.log(
@@ -296,9 +296,11 @@ You are Nexa AI, a helpful, multilingual general-purpose assistant.
             ? result.response.trim()
             : typeof result?.description === "string"
               ? result.description.trim()
-              : typeof result?.result?.answer === "string"
-                ? result.result.answer.trim()
-                : "";
+              : typeof result?.caption === "string"
+                ? result.caption.trim()
+                : typeof result?.result?.answer === "string"
+                  ? result.result.answer.trim()
+                  : "";
 
       if (!reply) {
         console.error(
