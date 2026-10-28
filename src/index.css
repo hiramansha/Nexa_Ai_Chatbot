@@ -1529,3 +1529,42 @@ body {
     margin-bottom: 10px;
   }
 }
+.attachment-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(140, 92, 255, 0.08);
+  color: inherit;
+  font-size: 12px;
+}
+
+.attachment-item span {
+  overflow-wrap: anywhere;
+}
+
+.attachment-item button {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.attachment-preview img {
+  flex-shrink: 0;
+  object-fit: cover;
+}
