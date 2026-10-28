@@ -281,13 +281,12 @@ You are Nexa AI, a helpful, multilingual general-purpose assistant.
         });
       }
 
-      // Log output structure, not the uploaded image itself.
+      // Diagnostic logs: do not log the uploaded image.
       console.log("AI model:", model);
+      console.log("AI output type:", typeof result);
       console.log(
-        "AI output keys:",
-        result && typeof result === "object"
-          ? Object.keys(result)
-          : []
+        "AI output:",
+        JSON.stringify(result ?? null)
       );
 
       const reply =
