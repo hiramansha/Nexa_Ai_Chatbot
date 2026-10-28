@@ -124,7 +124,7 @@ export default {
     try {
       // Generate a reply using Cloudflare Workers AI
       const result = await env.AI.run(
-        "@cf/meta/llama-3.1-8b-instruct",
+       "@cf/meta/llama-3.1-8b-instruct-fast",
         {
           messages: modelMessages,
           max_tokens: 1024
