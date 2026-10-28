@@ -162,7 +162,6 @@ export default {
         ) {
           const dataUri = part.image_url.url;
 
-          // Only accept embedded PNG, JPEG or WebP image data.
           const match = dataUri.match(
             /^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=\s]+)$/i
           );
@@ -220,8 +219,6 @@ You are Nexa AI, a helpful, multilingual general-purpose assistant.
 - Follow explicit language requests.
 - Use conversation history when answering text questions.
 - Keep simple answers concise and explain complex topics clearly.
-- When an image is provided, analyze its visible content and answer the user's question.
-- Never claim to have read an attachment unless its content was provided.
 - Be honest when information is uncertain.
 - Respond naturally to greetings and thanks.
 - If the user says only "Assalam o Alaikum", reply "Wa Alaikum Assalam".
@@ -242,7 +239,6 @@ You are Nexa AI, a helpful, multilingual general-purpose assistant.
       if (containsImage) {
         model = imageModel;
 
-        // Collect text from the latest user message.
         const latestMessage = messages[messages.length - 1];
 
         let question = "";
@@ -262,47 +258,56 @@ You are Nexa AI, a helpful, multilingual general-purpose assistant.
         }
 
         if (!question) {
-          question = "Describe this image and explain its visible content.";
+          question =
+            "Describe this image and explain its visible content.";
         }
 
-        // Moondream uses image + question, not chat messages.
         result = await env.AI.run(imageModel, {
           task: "query",
           image: imageDataUri,
           question,
-          reasoning: true,
+          reasoning: false,
           max_tokens: 1024
         });
       } else {
         model = textModel;
 
-        const modelMessages = [
-          systemMessage,
-          ...safeMessages
-        ];
-
         result = await env.AI.run(textModel, {
-          messages: modelMessages,
+          messages: [
+            systemMessage,
+            ...safeMessages
+          ],
           max_tokens: 1024
         });
       }
 
+      // Log output structure, not the uploaded image itself.
+      console.log("AI model:", model);
+      console.log(
+        "AI output keys:",
+        result && typeof result === "object"
+          ? Object.keys(result)
+          : []
+      );
+
       const reply =
-        typeof result?.response === "string"
-          ? result.response.trim()
-          : typeof result?.answer === "string"
-            ? result.answer.trim()
+        typeof result?.answer === "string"
+          ? result.answer.trim()
+          : typeof result?.response === "string"
+            ? result.response.trim()
             : typeof result?.description === "string"
               ? result.description.trim()
-              : "";
+              : typeof result?.result?.answer === "string"
+                ? result.result.answer.trim()
+                : "";
 
       if (!reply) {
         console.error(
-          "Workers AI returned an empty or unexpected response."
+          "AI returned an empty or unexpected response."
         );
 
         return json({
-          error: "The AI model returned an empty response."
+          error: "The AI model returned an empty response. Please check the Cloudflare Worker logs."
         }, 502);
       }
 
@@ -321,7 +326,7 @@ You are Nexa AI, a helpful, multilingual general-purpose assistant.
 
       return json({
         error: containsImage
-          ? "Image analysis failed. Please check the vision model availability, input format and account usage limits."
+          ? "Image analysis failed. Check the vision model availability and input format."
           : "Cloudflare Workers AI request failed.",
         details
       }, 502);
