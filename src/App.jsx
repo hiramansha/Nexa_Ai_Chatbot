@@ -176,7 +176,7 @@ export default function App() {
     setSidebarOpen(false);
 
     try {
-      const response = await fetch("/api/chat", {
+     const response = await fetch("https://nexa-ai-chatbot.23-st-028.workers.dev/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
