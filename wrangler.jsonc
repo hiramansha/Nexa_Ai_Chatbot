@@ -1,4 +1,3 @@
-
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "nexa-ai-chatbot",
@@ -9,5 +8,8 @@
     "binding": "ASSETS",
     "run_worker_first": ["/api/*"],
     "not_found_handling": "single-page-application"
+  },
+  "ai": {
+    "binding": "AI"
   }
 }
