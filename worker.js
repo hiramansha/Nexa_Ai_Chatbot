@@ -37,8 +37,22 @@ export default {
     }
 
     // Health check
-    if (url.pathname === "/api/health" && request.method === "GET") {
-      return json({ success: true, status: "ok" });
+    if (
+      url.pathname === "/api/health" &&
+      request.method === "GET"
+    ) {
+      return json({
+        success: true,
+        status: "ok"
+      });
+    }
+
+    // Temporary chat route diagnostic
+    if (url.pathname === "/api/chat") {
+      console.log(
+        "NEXA_CHAT_ROUTE_REACHED",
+        request.method
+      );
     }
 
     // Serve frontend assets for non-API routes
@@ -48,28 +62,41 @@ export default {
 
     // Chat endpoint accepts POST only
     if (request.method !== "POST") {
-      return json({ error: "Method not allowed" }, 405);
+      return json({
+        error: "Method not allowed"
+      }, 405);
     }
 
+    // Validate frontend origin
     if (origin && origin !== allowedOrigin) {
-      return json({ error: "Origin not allowed" }, 403);
+      return json({
+        error: "Origin not allowed"
+      }, 403);
     }
 
+    // Check API key configuration
     if (!env.OPENAI_API_KEY) {
       console.error("OPENAI_API_KEY secret is missing.");
-      return json({ error: "AI service is not configured." }, 500);
+
+      return json({
+        error: "AI service is not configured."
+      }, 500);
     }
 
+    // Parse request body
     let body;
 
     try {
       body = await request.json();
     } catch {
-      return json({ error: "Request body must contain valid JSON." }, 400);
+      return json({
+        error: "Request body must contain valid JSON."
+      }, 400);
     }
 
     const messages = body?.messages;
 
+    // Validate messages
     if (
       !Array.isArray(messages) ||
       messages.length === 0 ||
@@ -84,10 +111,13 @@ export default {
       ) ||
       messages[messages.length - 1].role !== "user"
     ) {
-      return json({ error: "Invalid messages." }, 400);
+      return json({
+        error: "Invalid messages."
+      }, 400);
     }
 
     try {
+      // Send request to OpenAI
       const response = await fetch(
         "https://api.openai.com/v1/responses",
         {
@@ -113,24 +143,37 @@ export default {
       try {
         result = await response.json();
       } catch {
-        console.error("OpenAI returned an invalid JSON response.");
-        return json({ error: "Invalid response from AI service." }, 502);
+        console.error(
+          "OpenAI returned an invalid JSON response."
+        );
+
+        return json({
+          error: "Invalid response from AI service."
+        }, 502);
       }
 
+      // Handle OpenAI API errors
       if (!response.ok) {
-        console.error("OpenAI API error:", response.status, result.error);
+        console.error(
+          "OpenAI API error:",
+          response.status,
+          result.error
+        );
 
         if (response.status === 429) {
           return json({
-            error: "AI usage limit reached. Check API billing and limits."
+            error:
+              "AI usage limit reached. Check API billing and limits."
           }, 429);
         }
 
         return json({
-          error: "AI service request failed. Check the Worker logs."
+          error:
+            "AI service request failed. Check the Worker logs."
         }, 502);
       }
 
+      // Extract assistant reply
       const reply = (result.output || [])
         .flatMap((item) => item.content || [])
         .filter((item) => item.type === "output_text")
@@ -139,14 +182,25 @@ export default {
         .trim();
 
       if (!reply) {
-        console.error("OpenAI response did not contain output text.");
-        return json({ error: "Empty AI response." }, 502);
+        console.error(
+          "OpenAI response did not contain output text."
+        );
+
+        return json({
+          error: "Empty AI response."
+        }, 502);
       }
 
       return json({ reply });
     } catch (error) {
-      console.error("Worker error:", error.message);
-      return json({ error: "Unable to process your message." }, 500);
+      console.error(
+        "Worker error:",
+        error.message
+      );
+
+      return json({
+        error: "Unable to process your message."
+      }, 500);
     }
   }
 };
