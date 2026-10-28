@@ -29,7 +29,7 @@ export default {
 
     if (request.method === "OPTIONS") {
       if (!origin || origin !== allowedOrigin) {
-        return json({ error: "Origin not allowed" }, 403);
+        return json({ error: "Origin not allowed." }, 403);
       }
 
       return new Response(null, {
@@ -49,7 +49,8 @@ export default {
         aiBindingAvailable: Boolean(env.AI),
         frontendConfigured: Boolean(allowedOrigin),
         imageSupport: true,
-        attachmentSupport: "Text content supplied by frontend"
+        imageModel: "@cf/moondream/moondream3.1-9B-A2B",
+        textModel: "@cf/meta/llama-3.1-8b-instruct-fast"
       });
     }
 
@@ -105,6 +106,8 @@ export default {
     }
 
     let containsImage = false;
+    let imageDataUri = "";
+    let imageCount = 0;
     let invalidMessage = false;
 
     const safeMessages = messages.slice(-20).map((message) => {
@@ -157,23 +160,29 @@ export default {
           part?.type === "image_url" &&
           typeof part.image_url?.url === "string"
         ) {
-          const imageUrl = part.image_url.url;
+          const dataUri = part.image_url.url;
 
-          // Accept only embedded image data, not external URLs.
-          const match = imageUrl.match(
+          // Only accept embedded PNG, JPEG or WebP image data.
+          const match = dataUri.match(
             /^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=\s]+)$/i
           );
 
-          if (!match || imageUrl.length > 5_500_000) {
+          if (
+            !match ||
+            dataUri.length > 5_500_000 ||
+            imageCount >= 1
+          ) {
             invalidMessage = true;
             return null;
           }
 
+          imageCount++;
           containsImage = true;
+          imageDataUri = dataUri;
 
           return {
             type: "image_url",
-            image_url: { url: imageUrl }
+            image_url: { url: dataUri }
           };
         }
 
@@ -197,7 +206,7 @@ export default {
       safeMessages.some((message) => message === null)
     ) {
       return json({
-        error: "Invalid message or attachment format."
+        error: "Invalid message or attachment format. Only one image can be analyzed per request."
       }, 400);
     }
 
@@ -209,10 +218,10 @@ You are Nexa AI, a helpful, multilingual general-purpose assistant.
 - Answer the user's actual question directly.
 - Reply in the user's language and writing style.
 - Follow explicit language requests.
-- Understand follow-up messages using conversation history.
+- Use conversation history when answering text questions.
 - Keep simple answers concise and explain complex topics clearly.
-- When an image is provided, examine it and answer questions about its visible content.
-- Never claim to have read an attachment unless its text is provided.
+- When an image is provided, analyze its visible content and answer the user's question.
+- Never claim to have read an attachment unless its content was provided.
 - Be honest when information is uncertain.
 - Respond naturally to greetings and thanks.
 - If the user says only "Assalam o Alaikum", reply "Wa Alaikum Assalam".
@@ -220,28 +229,77 @@ You are Nexa AI, a helpful, multilingual general-purpose assistant.
 `
     };
 
-    const modelMessages = [
-      systemMessage,
-      ...safeMessages
-    ];
+    const textModel =
+      "@cf/meta/llama-3.1-8b-instruct-fast";
 
-    const model = containsImage
-      ? "@cf/meta/llama-3.2-11b-vision-instruct"
-      : "@cf/meta/llama-3.1-8b-instruct-fast";
+    const imageModel =
+      "@cf/moondream/moondream3.1-9B-A2B";
 
     try {
-      const result = await env.AI.run(model, {
-        messages: modelMessages,
-        max_tokens: 1024
-      });
+      let result;
+      let model;
+
+      if (containsImage) {
+        model = imageModel;
+
+        // Collect text from the latest user message.
+        const latestMessage = messages[messages.length - 1];
+
+        let question = "";
+
+        if (typeof latestMessage.content === "string") {
+          question = latestMessage.content.trim();
+        } else if (Array.isArray(latestMessage.content)) {
+          question = latestMessage.content
+            .filter(
+              (part) =>
+                part?.type === "text" &&
+                typeof part.text === "string"
+            )
+            .map((part) => part.text.trim())
+            .filter(Boolean)
+            .join("\n");
+        }
+
+        if (!question) {
+          question = "Describe this image and explain its visible content.";
+        }
+
+        // Moondream uses image + question, not chat messages.
+        result = await env.AI.run(imageModel, {
+          task: "query",
+          image: imageDataUri,
+          question,
+          reasoning: true,
+          max_tokens: 1024
+        });
+      } else {
+        model = textModel;
+
+        const modelMessages = [
+          systemMessage,
+          ...safeMessages
+        ];
+
+        result = await env.AI.run(textModel, {
+          messages: modelMessages,
+          max_tokens: 1024
+        });
+      }
 
       const reply =
         typeof result?.response === "string"
           ? result.response.trim()
-          : "";
+          : typeof result?.answer === "string"
+            ? result.answer.trim()
+            : typeof result?.description === "string"
+              ? result.description.trim()
+              : "";
 
       if (!reply) {
-        console.error("Workers AI returned an empty response.");
+        console.error(
+          "Workers AI returned an empty or unexpected response."
+        );
 
         return json({
           error: "The AI model returned an empty response."
@@ -263,7 +321,7 @@ You are Nexa AI, a helpful, multilingual general-purpose assistant.
 
       return json({
         error: containsImage
-          ? "Image analysis failed. The vision model may require licence acceptance or may be unavailable."
+          ? "Image analysis failed. Please check the vision model availability, input format and account usage limits."
           : "Cloudflare Workers AI request failed.",
         details
       }, 502);
