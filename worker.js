@@ -27,7 +27,6 @@ export default {
         }
       });
 
-    // Handle browser preflight requests
     if (request.method === "OPTIONS") {
       if (!origin || origin !== allowedOrigin) {
         return json({ error: "Origin not allowed" }, 403);
@@ -39,7 +38,6 @@ export default {
       });
     }
 
-    // Health check
     if (
       url.pathname === "/api/health" &&
       request.method === "GET"
@@ -49,144 +47,226 @@ export default {
         status: "ok",
         provider: "Cloudflare Workers AI",
         aiBindingAvailable: Boolean(env.AI),
-        frontendConfigured: Boolean(allowedOrigin)
+        frontendConfigured: Boolean(allowedOrigin),
+        imageSupport: true,
+        attachmentSupport: "Text content supplied by frontend"
       });
     }
 
-    // Chat endpoint
-    if (url.pathname === "/api/chat") {
-      if (request.method !== "POST") {
-        return json({ error: "Method not allowed" }, 405);
+    if (url.pathname !== "/api/chat") {
+      if (env.ASSETS) {
+        return env.ASSETS.fetch(request);
       }
 
-      if (!origin || origin !== allowedOrigin) {
-        return json({ error: "Origin not allowed" }, 403);
-      }
+      return json({ error: "Route not found." }, 404);
+    }
 
-      if (!env.AI) {
-        console.error("Missing Cloudflare AI binding.");
+    if (request.method !== "POST") {
+      return json({ error: "Method not allowed." }, 405);
+    }
 
+    if (!origin || origin !== allowedOrigin) {
+      return json({ error: "Origin not allowed." }, 403);
+    }
+
+    if (!env.AI) {
+      return json({
+        error: "Cloudflare AI binding is missing."
+      }, 500);
+    }
+
+    let body;
+
+    try {
+      const rawBody = await request.text();
+
+      if (rawBody.length > 8_000_000) {
         return json({
-          error: "Cloudflare AI binding is missing."
-        }, 500);
+          error: "Request is too large. Please use a smaller image or file."
+        }, 413);
       }
 
-      let body;
+      body = JSON.parse(rawBody);
+    } catch {
+      return json({
+        error: "Request body must contain valid JSON."
+      }, 400);
+    }
 
-      try {
-        body = await request.json();
-      } catch {
-        return json({
-          error: "Request body must contain valid JSON."
-        }, 400);
-      }
+    const messages = body?.messages;
 
-      const messages = body?.messages;
+    if (
+      !Array.isArray(messages) ||
+      messages.length === 0 ||
+      messages.length > 30 ||
+      messages[messages.length - 1]?.role !== "user"
+    ) {
+      return json({ error: "Invalid messages." }, 400);
+    }
 
+    let containsImage = false;
+    let invalidMessage = false;
+
+    const safeMessages = messages.slice(-20).map((message) => {
       if (
-        !Array.isArray(messages) ||
-        messages.length === 0 ||
-        messages.length > 30 ||
-        !messages.every(
-          (message) =>
-            message &&
-            ["user", "assistant"].includes(message.role) &&
-            typeof message.content === "string" &&
-            message.content.trim().length > 0 &&
-            message.content.length <= 12000
-        ) ||
-        messages[messages.length - 1].role !== "user"
+        !message ||
+        !["user", "assistant"].includes(message.role)
       ) {
-        return json({ error: "Invalid messages." }, 400);
+        invalidMessage = true;
+        return null;
       }
 
-      const chatMessages = messages.slice(-20).map(
-        ({ role, content }) => ({
-          role,
-          content: content.slice(0, 12000)
-        })
-      );
-
-      
-const modelMessages = [
-  {
-    role: "system",
-    content: `
-You are Nexa AI, a multilingual, general-purpose AI assistant.
-
-LANGUAGE:
-- Understand and respond in any language you can reliably support.
-- Reply in the user's language and writing style.
-- Follow an explicitly requested language.
-- Understand mixed-language messages where possible.
-
-ANSWER QUALITY:
-- Answer the exact question directly and accurately.
-- Help with all topics within your knowledge and capabilities.
-- Give relevant answers, not unrelated conversation.
-- Keep simple answers short and explain complex topics step by step.
-- Understand previous messages and follow-up questions.
-- Provide complete code when appropriate for coding requests.
-- Never invent facts or sources.
-- If uncertain, say so honestly.
-- Ask clarifying questions only when necessary.
-- Respond naturally to greetings and thanks.
-- If the user says "Assalam o Alaikum", reply "Wa Alaikum Assalam".
-- Use clear formatting when helpful.
-
-Be respectful, helpful, accurate, and relevant.
-`
-  },
-  ...chatMessages
-];
-
-
-      try {
-        const result = await env.AI.run(
-          "@cf/meta/llama-3.1-8b-instruct-fast",
-          {
-            messages: modelMessages,
-            max_tokens: 1024
-          }
-        );
-
-        const reply =
-          typeof result?.response === "string"
-            ? result.response.trim()
-            : "";
-
-        if (!reply) {
-          console.error(
-            "Workers AI returned an empty response:",
-            JSON.stringify(result)
-          );
-
-          return json({
-            error: "The AI model returned an empty response."
-          }, 502);
+      if (typeof message.content === "string") {
+        if (
+          !message.content.trim() ||
+          message.content.length > 12000
+        ) {
+          invalidMessage = true;
+          return null;
         }
 
-        return json({ reply });
-      } catch (error) {
-        const details =
-          error instanceof Error
-            ? error.message
-            : String(error);
+        return {
+          role: message.role,
+          content: message.content
+        };
+      }
 
-        console.error("Cloudflare Workers AI error:", details);
+      if (
+        message.role !== "user" ||
+        !Array.isArray(message.content) ||
+        message.content.length === 0 ||
+        message.content.length > 6
+      ) {
+        invalidMessage = true;
+        return null;
+      }
+
+      const parts = message.content.map((part) => {
+        if (
+          part?.type === "text" &&
+          typeof part.text === "string" &&
+          part.text.length <= 12000
+        ) {
+          return {
+            type: "text",
+            text: part.text
+          };
+        }
+
+        if (
+          part?.type === "image_url" &&
+          typeof part.image_url?.url === "string"
+        ) {
+          const imageUrl = part.image_url.url;
+
+          // Accept only embedded image data, not external URLs.
+          const match = imageUrl.match(
+            /^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=\s]+)$/i
+          );
+
+          if (!match || imageUrl.length > 5_500_000) {
+            invalidMessage = true;
+            return null;
+          }
+
+          containsImage = true;
+
+          return {
+            type: "image_url",
+            image_url: { url: imageUrl }
+          };
+        }
+
+        invalidMessage = true;
+        return null;
+      });
+
+      if (parts.some((part) => part === null)) {
+        invalidMessage = true;
+        return null;
+      }
+
+      return {
+        role: message.role,
+        content: parts
+      };
+    });
+
+    if (
+      invalidMessage ||
+      safeMessages.some((message) => message === null)
+    ) {
+      return json({
+        error: "Invalid message or attachment format."
+      }, 400);
+    }
+
+    const systemMessage = {
+      role: "system",
+      content: `
+You are Nexa AI, a helpful, multilingual general-purpose assistant.
+
+- Answer the user's actual question directly.
+- Reply in the user's language and writing style.
+- Follow explicit language requests.
+- Understand follow-up messages using conversation history.
+- Keep simple answers concise and explain complex topics clearly.
+- When an image is provided, examine it and answer questions about its visible content.
+- Never claim to have read an attachment unless its text is provided.
+- Be honest when information is uncertain.
+- Respond naturally to greetings and thanks.
+- If the user says only "Assalam o Alaikum", reply "Wa Alaikum Assalam".
+- Stay relevant, respectful, and accurate.
+`
+    };
+
+    const modelMessages = [
+      systemMessage,
+      ...safeMessages
+    ];
+
+    const model = containsImage
+      ? "@cf/meta/llama-3.2-11b-vision-instruct"
+      : "@cf/meta/llama-3.1-8b-instruct-fast";
+
+    try {
+      const result = await env.AI.run(model, {
+        messages: modelMessages,
+        max_tokens: 1024
+      });
+
+      const reply =
+        typeof result?.response === "string"
+          ? result.response.trim()
+          : "";
+
+      if (!reply) {
+        console.error("Workers AI returned an empty response.");
 
         return json({
-          error: "Cloudflare Workers AI request failed.",
-          details
+          error: "The AI model returned an empty response."
         }, 502);
       }
-    }
 
-    // Serve other frontend assets
-    if (env.ASSETS) {
-      return env.ASSETS.fetch(request);
-    }
+      return json({
+        success: true,
+        reply,
+        model
+      });
+    } catch (error) {
+      const details =
+        error instanceof Error
+          ? error.message
+          : String(error);
 
-    return json({ error: "Route not found." }, 404);
+      console.error("Cloudflare Workers AI error:", details);
+
+      return json({
+        error: containsImage
+          ? "Image analysis failed. The vision model may require licence acceptance or may be unavailable."
+          : "Cloudflare Workers AI request failed.",
+        details
+      }, 502);
+    }
   }
 };
