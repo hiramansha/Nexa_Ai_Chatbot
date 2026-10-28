@@ -100,14 +100,12 @@ const [activeId, setActiveId] = useState(null);
   }
 
   function newChat() {
-    const chat = makeChat();
-    setChats((previous) => [chat, ...previous]);
-    setActiveId(chat.id);
-    setInput("");
-    setSidebarOpen(false);
-    setNotice("");
-    setShowMenu(false);
-  }
+  setActiveId(null);
+  setInput("");
+  setSidebarOpen(false);
+  setNotice("");
+  setShowMenu(false);
+}
 
   function openChat(id) {
     setActiveId(id);
