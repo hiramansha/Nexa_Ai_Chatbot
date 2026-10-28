@@ -69,10 +69,7 @@ function demoReply(prompt) {
 
 export default function App() {
   const [chats, setChats] = useState(readChats);
-  const [activeId, setActiveId] = useState(() => {
-    const saved = readChats();
-    return saved[0]?.id || null;
-  });
+const [activeId, setActiveId] = useState(null);
   const [input, setInput] = useState("");
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
