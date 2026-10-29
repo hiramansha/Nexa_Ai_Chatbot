@@ -1,4 +1,3 @@
-
 {
   "name": "nexa-ai-chatbot",
   "private": true,
@@ -11,6 +10,7 @@
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
+    "pdfjs-dist": "^4.10.38",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
