@@ -1,5 +1,9 @@
-
 import { useEffect, useRef, useState } from "react";
+import * as pdfjsLib from "pdfjs-dist";
+import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+
 import {
   Sparkles, Plus, History, Search, Settings, CircleHelp,
   Crown, MessageCircle, Code2, Plane, Lightbulb, Paperclip,
@@ -11,6 +15,8 @@ import {
 const STORAGE_KEY = "nexa-ai-chats-v1";
 const API_URL = "https://nexa-ai-chatbot.23-st-028.workers.dev/api/chat";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_EXTRACTED_TEXT = 10000;
+const MAX_PDF_PAGES = 30;
 const MAX_IMAGE_SIZE = 4 * 1024 * 1024;
 const MAX_FILES = 5;
 const MAX_IMAGES = 3;
@@ -82,11 +88,85 @@ function fileToDataUrl(file) {
   });
 }
 
+async function readPdfFile(file) {
+  const buffer = await file.arrayBuffer();
+  let pdfDocument;
+
+  try {
+    pdfDocument = await pdfjsLib.getDocument({ data: buffer }).promise;
+    const pageCount = Math.min(pdfDocument.numPages, MAX_PDF_PAGES);
+    const pages = [];
+
+    for (let pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
+      const page = await pdfDocument.getPage(pageNumber);
+      const pageContent = await page.getTextContent();
+      const pageText = pageContent.items
+        .map((item) => ("str" in item ? item.str : ""))
+        .filter(Boolean)
+        .join(" ");
+
+      pages.push(`Page ${pageNumber}:\n${pageText}`);
+
+      if (pages.join("\n\n").length >= MAX_EXTRACTED_TEXT) break;
+    }
+
+    let extractedText = pages.join("\n\n").trim();
+
+    if (!extractedText) {
+      throw new Error(
+        `${file.name} does not contain selectable text. Scanned PDFs need OCR, which is not enabled yet.`
+      );
+    }
+
+    if (extractedText.length > MAX_EXTRACTED_TEXT) {
+      extractedText = extractedText.slice(0, MAX_EXTRACTED_TEXT);
+    }
+
+    if (pdfDocument.numPages > MAX_PDF_PAGES) {
+      extractedText += `\n\n[Note: Only the first ${MAX_PDF_PAGES} pages were processed.]`;
+    }
+
+    return extractedText;
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.includes("does not contain selectable text")
+    ) {
+      throw error;
+    }
+
+    throw new Error(
+      `Could not read ${file.name}. Please make sure it is a valid, text-based PDF.`
+    );
+  } finally {
+    pdfDocument?.destroy();
+  }
+}
+
 async function readTextFile(file) {
   try {
-    return await file.text();
-  } catch {
-    throw new Error(`Could not read ${file.name}.`);
+    const extension = "." + file.name.split(".").pop().toLowerCase();
+    const content = extension === ".pdf"
+      ? await readPdfFile(file)
+      : await file.text();
+
+    const text = String(content || "");
+
+    if (!text.trim()) {
+      throw new Error(`${file.name} does not contain readable text.`);
+    }
+
+    return text.length > MAX_EXTRACTED_TEXT
+      ? `${text.slice(0, MAX_EXTRACTED_TEXT)}\n\n[Note: Text was shortened to fit the AI request.]`
+      : text;
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Could not read ")) {
+      throw error;
+    }
+
+    throw new Error(
+      error instanceof Error ? error.message : `Could not read ${file.name}.`
+    );
   }
 }
 
@@ -173,264 +253,305 @@ export default function App() {
     setAttachedFiles([]);
     setSelectedImages([]);
   }
-
-  function newChat() {
+    function newChat() {
     setActiveId(null);
     setInput("");
+    clearAttachments();
     setSidebarOpen(false);
     setNotice("");
-    setShowMenu(false);
-    clearAttachments();
+    textareaRef.current?.focus();
   }
 
   function openChat(id) {
     setActiveId(id);
+    setInput("");
+    clearAttachments();
     setSidebarOpen(false);
     setNotice("");
-    clearAttachments();
   }
 
   function deleteChat(id) {
-    const remaining = chats.filter((chat) => chat.id !== id);
-    setChats(remaining);
+    setChats((previous) => previous.filter((chat) => chat.id !== id));
 
     if (activeId === id) {
-      setActiveId(remaining[0]?.id || null);
+      setActiveId(null);
+      clearAttachments();
     }
+
+    setNotice("Conversation deleted.");
   }
 
-  function renameChat(chat) {
-    const title = window.prompt("Enter a new conversation title:", chat.title);
-    if (!title?.trim()) return;
+  function renameChat(id) {
+    const chat = chats.find((item) => item.id === id);
+    if (!chat) return;
 
-    updateChat(chat.id, (current) => ({
-      ...current,
-      title: title.trim(),
-      updatedAt: Date.now()
-    }));
+    const nextTitle = window.prompt("Enter a new conversation name:", chat.title);
+
+    if (nextTitle?.trim()) {
+      updateChat(id, (item) => ({
+        ...item,
+        title: nextTitle.trim().slice(0, 100)
+      }));
+    }
   }
 
   function handleFileSelection(event) {
     const files = Array.from(event.target.files || []);
-    const allowedExtensions = [".txt", ".md", ".csv", ".json"];
-    const validFiles = [];
-    const errors = [];
+    event.target.value = "";
 
-    const remainingSlots = MAX_FILES - attachedFilesRef.current.length;
+    if (!files.length) return;
+
+    const acceptedExtensions = [
+      ".txt", ".md", ".csv", ".json", ".pdf"
+    ];
+
+    const newFiles = [];
+    const errors = [];
 
     for (const file of files) {
       const extension = "." + file.name.split(".").pop().toLowerCase();
 
-      if (!allowedExtensions.includes(extension)) {
-        errors.push(`${file.name}: use TXT, MD, CSV or JSON.`);
+      if (!acceptedExtensions.includes(extension)) {
+        errors.push(`${file.name}: unsupported file type.`);
         continue;
       }
 
       if (file.size > MAX_FILE_SIZE) {
-        errors.push(`${file.name}: maximum size is 5 MB.`);
+        errors.push(`${file.name}: maximum file size is 5 MB.`);
         continue;
       }
 
-      if (validFiles.length >= remainingSlots) {
-        errors.push(`You can attach up to ${MAX_FILES} files.`);
+      if (attachedFilesRef.current.some((item) => item.name === file.name)) {
+        errors.push(`${file.name}: already attached.`);
+        continue;
+      }
+
+      if (attachedFilesRef.current.length + newFiles.length >= MAX_FILES) {
+        errors.push(`You can attach up to ${MAX_FILES} documents at a time.`);
         break;
       }
 
-      validFiles.push({ id: makeId(), file });
+      newFiles.push(file);
     }
 
-    const nextFiles = [...attachedFilesRef.current, ...validFiles];
-    attachedFilesRef.current = nextFiles;
-    setAttachedFiles(nextFiles);
-    setNotice(errors.join(" ") || "");
-    event.target.value = "";
+    if (newFiles.length) {
+      setAttachedFiles((previous) => [...previous, ...newFiles]);
+      setNotice(
+        `${newFiles.length} document(s) added. PDFs will be read when you send your message.`
+      );
+    } else if (errors.length) {
+      setNotice(errors.join(" "));
+    }
+  }
+
+  function removeAttachedFile(index) {
+    setAttachedFiles((previous) =>
+      previous.filter((_, fileIndex) => fileIndex !== index)
+    );
   }
 
   function handleImageSelection(event) {
     const files = Array.from(event.target.files || []);
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
-    const validImages = [];
+    event.target.value = "";
+
+    if (!files.length) return;
+
+    const acceptedTypes = ["image/jpeg", "image/png", "image/webp"];
+    const newImages = [];
     const errors = [];
 
-    const remainingSlots = MAX_IMAGES - selectedImagesRef.current.length;
-
     for (const file of files) {
-      if (!allowedTypes.includes(file.type)) {
-        errors.push(`${file.name}: use JPG, PNG or WebP.`);
+      if (!acceptedTypes.includes(file.type)) {
+        errors.push(`${file.name}: use JPG, PNG, or WEBP.`);
         continue;
       }
 
       if (file.size > MAX_IMAGE_SIZE) {
-        errors.push(`${file.name}: maximum image size is 4 MB.`);
+        errors.push(`${file.name}: image size must be under 4 MB.`);
         continue;
       }
 
-      if (validImages.length >= remainingSlots) {
-        errors.push(`You can attach up to ${MAX_IMAGES} images.`);
+      if (selectedImagesRef.current.length + newImages.length >= MAX_IMAGES) {
+        errors.push(`You can select up to ${MAX_IMAGES} images.`);
         break;
       }
 
-      validImages.push({
+      newImages.push({
         id: makeId(),
         file,
+        name: file.name,
         preview: URL.createObjectURL(file)
       });
     }
 
-    const nextImages = [...selectedImagesRef.current, ...validImages];
-    selectedImagesRef.current = nextImages;
-    setSelectedImages(nextImages);
-    setNotice(errors.join(" ") || "");
-    event.target.value = "";
-  }
-
-  function removeAttachedFile(id) {
-    const nextFiles = attachedFilesRef.current.filter((item) => item.id !== id);
-    attachedFilesRef.current = nextFiles;
-    setAttachedFiles(nextFiles);
+    if (newImages.length) {
+      setSelectedImages((previous) => [...previous, ...newImages]);
+      setNotice(`${newImages.length} image(s) added.`);
+    } else if (errors.length) {
+      setNotice(errors.join(" "));
+    }
   }
 
   function removeSelectedImage(id) {
-    const image = selectedImagesRef.current.find((item) => item.id === id);
+    setSelectedImages((previous) => {
+      const image = previous.find((item) => item.id === id);
 
-    if (image) URL.revokeObjectURL(image.preview);
+      if (image) URL.revokeObjectURL(image.preview);
 
-    const nextImages = selectedImagesRef.current.filter((item) => item.id !== id);
-    selectedImagesRef.current = nextImages;
-    setSelectedImages(nextImages);
+      return previous.filter((item) => item.id !== id);
+    });
   }
 
-  async function sendMessage(text = input) {
+  async function copyMessage(text, id) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      window.setTimeout(() => setCopiedId(null), 1500);
+    } catch {
+      setNotice("Copy failed. Please select and copy the text manually.");
+    }
+  }
+
+  async function sendMessage(customPrompt) {
     if (busyRef.current) return;
 
-    const prompt = text.trim();
+    const prompt = (customPrompt ?? input).trim();
     const filesToSend = [...attachedFilesRef.current];
     const imagesToSend = [...selectedImagesRef.current];
 
-    if (!prompt && filesToSend.length === 0 && imagesToSend.length === 0) {
-      return;
-    }
+    if (!prompt && !filesToSend.length && !imagesToSend.length) return;
 
     busyRef.current = true;
-    let chatId = activeId;
-    let currentChat = chats.find((chat) => chat.id === chatId);
+    setThinking(true);
+    setInput("");
+    setNotice("");
 
-    if (!currentChat) {
-      currentChat = makeChat();
-      chatId = currentChat.id;
-      setActiveId(chatId);
-      setChats((previous) => [currentChat, ...previous]);
-    }
-
-    const userText = prompt || "Please analyse the attached file(s) and image(s).";
-
-    const attachmentLabels = [
-      ...filesToSend.map(({ file }) => file.name),
-      ...imagesToSend.map(({ file }) => file.name)
-    ];
+    const chatId = activeId || makeId();
+    const existingChat = chats.find((chat) => chat.id === chatId);
 
     const userMessage = {
       id: makeId(),
       role: "user",
-      content: userText,
-      attachments: attachmentLabels
+      content: prompt || "Please read and analyse my attachment.",
+      attachments: [
+        ...filesToSend.map((file) => ({
+          name: file.name,
+          type: file.name.toLowerCase().endsWith(".pdf") ? "pdf" : "document"
+        })),
+        ...imagesToSend.map((image) => ({
+          name: image.name,
+          type: "image"
+        }))
+      ],
+      createdAt: Date.now()
     };
 
-    const previousMessages = currentChat.messages
-      .filter((message) => ["user", "assistant"].includes(message.role))
-      .map(({ role, content }) => ({ role, content }));
+    const previousMessages = existingChat?.messages || [];
 
-    updateChat(chatId, (chat) => ({
-      ...chat,
-      title: chat.messages.length === 0
-        ? (userText.slice(0, 36) + (userText.length > 36 ? "…" : ""))
-        : chat.title,
+    const updatedChat = {
+      id: chatId,
+      title: existingChat?.title ||
+        (prompt || filesToSend[0]?.name || imagesToSend[0]?.name || "New conversation")
+          .slice(0, 55),
       updatedAt: Date.now(),
-      messages: [...chat.messages, userMessage]
-    }));
+      messages: [...previousMessages, userMessage]
+    };
 
-    setInput("");
-    setThinking(true);
-    setNotice("");
-    setSidebarOpen(false);
+    setChats((previous) => {
+      const withoutChat = previous.filter((chat) => chat.id !== chatId);
+      return [updatedChat, ...withoutChat];
+    });
+
+    setActiveId(chatId);
+    clearAttachments();
 
     try {
-      const contentParts = [];
+      const documentParts = [];
 
-      if (prompt) {
-        contentParts.push({ type: "text", text: prompt });
+      for (const file of filesToSend) {
+        const text = await readTextFile(file);
+
+        documentParts.push(
+          `DOCUMENT: ${file.name}\n` +
+          `The following is extracted text from the user's document. ` +
+          `Use it as source material when answering the user's question.\n\n` +
+          text
+        );
       }
 
-      for (const { file } of filesToSend) {
-        const content = await readTextFile(file);
+      const imageParts = [];
 
-        contentParts.push({
-          type: "text",
-          text: `\n\nAttached file: ${file.name}\n\n${content}`
-        });
-      }
+      for (const image of imagesToSend) {
+        const dataUrl = await fileToDataUrl(image.file);
 
-      for (const { file } of imagesToSend) {
-        const dataUrl = await fileToDataUrl(file);
-
-        contentParts.push({
+        imageParts.push({
           type: "image_url",
           image_url: { url: dataUrl }
         });
       }
 
-      const currentUserMessage = {
-        role: "user",
-        content: contentParts.length === 1 && contentParts[0].type === "text"
-          ? contentParts[0].text
-          : contentParts
-      };
+      const userText = [
+        prompt,
+        ...documentParts
+      ].filter(Boolean).join("\n\n");
+
+      const content = [
+        { type: "text", text: userText || "Please analyse the attached image." },
+        ...imageParts
+      ];
+
+      const apiMessages = [
+        ...previousMessages.slice(-18).map((message) => ({
+          role: message.role,
+          content: getMessageText(message.content)
+        })),
+        {
+          role: "user",
+          content: imageParts.length ? content : userText
+        }
+      ];
 
       const response = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [...previousMessages, currentUserMessage]
-        })
+        body: JSON.stringify({ messages: apiMessages })
       });
 
-      const data = await response.json().catch(() => ({}));
+      const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || `AI request failed (${response.status}).`);
+      if (!response.ok || !data.reply) {
+        throw new Error(data.error || "Nexa AI could not generate a response.");
       }
 
-      if (typeof data.reply !== "string" || !data.reply.trim()) {
-        throw new Error("The AI returned an empty response.");
-      }
+      const assistantMessage = {
+        id: makeId(),
+        role: "assistant",
+        content: data.reply,
+        createdAt: Date.now()
+      };
 
       updateChat(chatId, (chat) => ({
         ...chat,
         updatedAt: Date.now(),
-        messages: [
-          ...chat.messages,
-          {
-            id: makeId(),
-            role: "assistant",
-            content: data.reply
-          }
-        ]
+        messages: [...chat.messages, assistantMessage]
       }));
-
-      clearAttachments();
     } catch (error) {
       setNotice(
-        error.message ||
-        "Unable to connect to Nexa AI. Please try again."
+        error instanceof Error
+          ? error.message
+          : "Something went wrong. Please try again."
       );
     } finally {
       busyRef.current = false;
       setThinking(false);
+      textareaRef.current?.focus();
     }
   }
+    async function regenerate(messageIndex) {
+    const currentMessages =
+      chats.find((chat) => chat.id === activeId)?.messages || [];
 
-  async function regenerate(messageIndex) {
-    const previousUserMessage = messages
+    const previousUserMessage = currentMessages
       .slice(0, messageIndex)
       .reverse()
       .find((message) => message.role === "user");
@@ -438,33 +559,40 @@ export default function App() {
     if (!previousUserMessage || thinking || !activeId) return;
 
     const chatId = activeId;
-    const history = messages
+
+    const history = currentMessages
       .slice(0, messageIndex)
-      .filter((message) => ["user", "assistant"].includes(message.role))
+      .filter((message) =>
+        ["user", "assistant"].includes(message.role)
+      )
       .map(({ role, content }) => ({
         role,
-        content: typeof content === "string" ? content : getMessageText(content)
+        content:
+          typeof content === "string"
+            ? content
+            : getMessageText(content)
       }));
 
     setThinking(true);
     setNotice("");
 
-    updateChat(chatId, (chat) => ({
-      ...chat,
-      messages: chat.messages.slice(0, messageIndex)
-    }));
-
     try {
       const response = await fetch(API_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history })
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          messages: history
+        })
       });
 
       const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data.error || `AI request failed (${response.status}).`);
+        throw new Error(
+          data.error || `AI request failed (${response.status}).`
+        );
       }
 
       if (typeof data.reply !== "string" || !data.reply.trim()) {
@@ -475,7 +603,7 @@ export default function App() {
         ...chat,
         updatedAt: Date.now(),
         messages: [
-          ...chat.messages,
+          ...chat.messages.slice(0, messageIndex),
           {
             id: makeId(),
             role: "assistant",
@@ -484,36 +612,36 @@ export default function App() {
         ]
       }));
     } catch (error) {
-      setNotice(error.message || "Unable to regenerate the response.");
+      setNotice(
+        error.message || "Unable to regenerate the response."
+      );
     } finally {
       setThinking(false);
     }
   }
 
-  async function copyMessage(message) {
-    try {
-      await navigator.clipboard.writeText(getMessageText(message.content));
-      setCopiedId(message.id);
-      window.setTimeout(() => setCopiedId(null), 1600);
-    } catch {
-      setNotice("Copy is unavailable in this browser context.");
-    }
-  }
-
   function handleSubmit(event) {
     event.preventDefault();
+
+    if (thinking) return;
+
     sendMessage();
   }
 
   function handleKeyDown(event) {
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey &&
+      !event.nativeEvent?.isComposing
+    ) {
       event.preventDefault();
-      sendMessage();
+      handleSubmit(event);
     }
   }
-
-  const visibleChats = chats
-    .filter((chat) => chat.title.toLowerCase().includes(search.toLowerCase()))
+    const visibleChats = chats
+    .filter((chat) =>
+      chat.title.toLowerCase().includes(search.toLowerCase())
+    )
     .sort((a, b) => b.updatedAt - a.updatedAt);
 
   return (
@@ -544,7 +672,9 @@ export default function App() {
               <div className="brand-mark">N</div>
 
               <div>
-                <div className="brand-name">Nexa <span>AI</span></div>
+                <div className="brand-name">
+                  Nexa <span>AI</span>
+                </div>
                 <div className="brand-caption">AI Assistant</div>
               </div>
 
@@ -559,7 +689,11 @@ export default function App() {
               </button>
             </div>
 
-            <button type="button" className="primary-btn" onClick={newChat}>
+            <button
+              type="button"
+              className="primary-btn"
+              onClick={newChat}
+            >
               <Plus size={19} /> New Chat
             </button>
 
@@ -600,7 +734,9 @@ export default function App() {
               {visibleChats.map((chat) => (
                 <div
                   key={chat.id}
-                  className={`recent-item ${chat.id === activeId ? "active" : ""}`}
+                  className={`recent-item ${
+                    chat.id === activeId ? "active" : ""
+                  }`}
                 >
                   <button
                     type="button"
@@ -651,7 +787,9 @@ export default function App() {
               ))}
 
               {visibleChats.length === 0 && (
-                <div className="empty-history">No matching conversations.</div>
+                <div className="empty-history">
+                  No matching conversations.
+                </div>
               )}
             </div>
 
@@ -659,7 +797,9 @@ export default function App() {
               <button
                 type="button"
                 className="side-link"
-                onClick={() => setNotice("Theme and chat preferences are available here.")}
+                onClick={() =>
+                  setNotice("Theme and chat preferences are available here.")
+                }
               >
                 <Settings size={19} /> Settings
               </button>
@@ -667,23 +807,36 @@ export default function App() {
               <button
                 type="button"
                 className="side-link"
-                onClick={() => setNotice("Nexa AI support: check the backend status and try again.")}
+                onClick={() =>
+                  setNotice(
+                    "Nexa AI support: check the backend status and try again."
+                  )
+                }
               >
                 <CircleHelp size={19} /> Help & Support
               </button>
 
               <div className="upgrade">
                 <div className="upgrade-heading">
-                  <span className="upgrade-icon"><Crown size={20} /></span>
+                  <span className="upgrade-icon">
+                    <Crown size={20} />
+                  </span>
                   Upgrade to Pro
                 </div>
 
-                <p>Explore a premium AI experience with more possibilities and powerful features.</p>
+                <p>
+                  Explore a premium AI experience with more possibilities
+                  and powerful features.
+                </p>
 
                 <button
                   type="button"
                   className="primary-btn"
-                  onClick={() => setNotice("Pro plans are a future feature. No payment is being taken.")}
+                  onClick={() =>
+                    setNotice(
+                      "Pro plans are a future feature. No payment is being taken."
+                    )
+                  }
                 >
                   Explore Pro <span>→</span>
                 </button>
@@ -706,12 +859,20 @@ export default function App() {
 
           <main className="main-panel">
             <div className="top-controls">
-              <div style={{ display: "flex", gap: 9, alignItems: "center" }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 9,
+                  alignItems: "center"
+                }}
+              >
                 <button
                   type="button"
                   className="icon-btn mobile-menu"
                   title="Open sidebar"
-                  onClick={() => setSidebarOpen((value) => !value)}
+                  onClick={() =>
+                    setSidebarOpen((value) => !value)
+                  }
                 >
                   <Menu size={20} />
                 </button>
@@ -719,9 +880,15 @@ export default function App() {
                 <button
                   type="button"
                   className="model-select"
-                  onClick={() => setNotice("Nexa AI is using the configured Cloudflare AI backend.")}
+                  onClick={() =>
+                    setNotice(
+                      "Nexa AI is using the configured Cloudflare AI backend."
+                    )
+                  }
                 >
-                  <Sparkles size={17} /> Nexa AI <ChevronDown size={15} />
+                  <Sparkles size={17} />
+                  Nexa AI
+                  <ChevronDown size={15} />
                 </button>
               </div>
 
@@ -730,7 +897,9 @@ export default function App() {
                   type="button"
                   className="more-btn"
                   title="More options"
-                  onClick={() => setShowMenu((value) => !value)}
+                  onClick={() =>
+                    setShowMenu((value) => !value)
+                  }
                 >
                   <MoreHorizontal size={21} />
                 </button>
@@ -769,7 +938,11 @@ export default function App() {
                         setShowMenu(false);
                       }}
                     >
-                      {lightMode ? <Moon size={16} /> : <Sun size={16} />}
+                      {lightMode ? (
+                        <Moon size={16} />
+                      ) : (
+                        <Sun size={16} />
+                      )}
                       Toggle theme
                     </button>
                   </div>
@@ -783,8 +956,14 @@ export default function App() {
                   <div className="orb-core" />
                 </div>
 
-                <h1>Welcome to <span className="gradient-text">Nexa AI</span></h1>
-                <p className="subtitle">Your ideas. Your AI. Your next step.</p>
+                <h1>
+                  Welcome to{" "}
+                  <span className="gradient-text">Nexa AI</span>
+                </h1>
+
+                <p className="subtitle">
+                  Your ideas. Your AI. Your next step.
+                </p>
 
                 <div className="suggestions">
                   {suggestions.map((item) => {
@@ -798,7 +977,9 @@ export default function App() {
                         onClick={() => sendMessage(item.prompt)}
                       >
                         <div className="suggestion-head">
-                          <span className="suggestion-icon"><Icon size={22} /></span>
+                          <span className="suggestion-icon">
+                            <Icon size={22} />
+                          </span>
                           <span>{item.title}</span>
                         </div>
 
@@ -813,10 +994,14 @@ export default function App() {
                 {messages.map((message, index) => (
                   <div
                     key={message.id}
-                    className={`message ${message.role === "user" ? "user" : ""}`}
+                    className={`message ${
+                      message.role === "user" ? "user" : ""
+                    }`}
                   >
                     {message.role === "assistant" && (
-                      <div className="message-avatar"><Sparkles size={18} /></div>
+                      <div className="message-avatar">
+                        <Sparkles size={18} />
+                      </div>
                     )}
 
                     <div className="message-body">
@@ -830,8 +1015,11 @@ export default function App() {
 
                       {message.attachments?.length > 0 && (
                         <div className="message-attachments">
-                          {message.attachments.map((name) => (
-                            <span key={name} className="attachment-item">
+                          {message.attachments.map((name, attachmentIndex) => (
+                            <span
+                              key={`${name}-${attachmentIndex}`}
+                              className="attachment-item"
+                            >
                               <Paperclip size={14} /> {name}
                             </span>
                           ))}
@@ -840,10 +1028,15 @@ export default function App() {
 
                       {message.role === "assistant" && (
                         <div className="message-actions">
-                          <button type="button" onClick={() => copyMessage(message)}>
-                            {copiedId === message.id
-                              ? <Check size={14} />
-                              : <Copy size={14} />}
+                          <button
+                            type="button"
+                            onClick={() => copyMessage(message)}
+                          >
+                            {copiedId === message.id ? (
+                              <Check size={14} />
+                            ) : (
+                              <Copy size={14} />
+                            )}
                             {copiedId === message.id ? "Copied" : "Copy"}
                           </button>
 
@@ -862,7 +1055,9 @@ export default function App() {
 
                 {thinking && (
                   <div className="message">
-                    <div className="message-avatar"><Sparkles size={18} /></div>
+                    <div className="message-avatar">
+                      <Sparkles size={18} />
+                    </div>
 
                     <div className="message-body">
                       <div className="message-role">Nexa AI</div>
@@ -916,7 +1111,7 @@ export default function App() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".txt,.md,.csv,.json"
+                accept=".txt,.md,.csv,.json,.pdf"
                 multiple
                 hidden
                 onChange={handleFileSelection}
@@ -931,7 +1126,8 @@ export default function App() {
                 onChange={handleImageSelection}
               />
 
-              {(attachedFiles.length > 0 || selectedImages.length > 0) && (
+              {(attachedFiles.length > 0 ||
+                selectedImages.length > 0) && (
                 <div className="attachment-preview">
                   {attachedFiles.map(({ id, file }) => (
                     <div className="attachment-item" key={id}>
@@ -1000,7 +1196,9 @@ export default function App() {
                     type="button"
                     className="tool-pill"
                     onClick={() => imageInputRef.current?.click()}
-                    disabled={thinking || selectedImages.length >= MAX_IMAGES}
+                    disabled={
+                      thinking || selectedImages.length >= MAX_IMAGES
+                    }
                   >
                     <ImageIcon size={16} /> Images
                   </button>
@@ -1008,7 +1206,11 @@ export default function App() {
                   <button
                     type="button"
                     className={`tool-pill ${thinking ? "selected" : ""}`}
-                    onClick={() => setNotice("Thinking mode uses the configured AI model.")}
+                    onClick={() =>
+                      setNotice(
+                        "Thinking mode uses the configured AI model."
+                      )
+                    }
                   >
                     <Brain size={16} /> Thinking
                   </button>
@@ -1020,9 +1222,13 @@ export default function App() {
                   type="button"
                   className="icon-btn"
                   title="Voice input is not enabled yet"
-                  onClick={() => setNotice("Voice input is planned for a future update.")}
+                  onClick={() =>
+                    setNotice(
+                      "Voice input is planned for a future update."
+                    )
+                  }
                 >
-                  <Mic size={19} />
+                  <Mic size={18} />
                 </button>
 
                 <button
@@ -1030,13 +1236,13 @@ export default function App() {
                   className="send-btn"
                   title="Send message"
                   disabled={
+                    thinking ||
                     (!input.trim() &&
                       attachedFiles.length === 0 &&
-                      selectedImages.length === 0) ||
-                    thinking
+                      selectedImages.length === 0)
                   }
                 >
-                  <Send size={19} />
+                  <Send size={18} />
                 </button>
               </div>
             </form>
