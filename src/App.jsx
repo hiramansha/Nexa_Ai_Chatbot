@@ -12,6 +12,8 @@ import {
   LogOut
 } from "lucide-react";
 
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+
 const STORAGE_KEY = "nexa-ai-chats-v1";
 const API_URL = "https://nexa-ai-chatbot.23-st-028.workers.dev/api/chat";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -281,7 +283,8 @@ export default function App() {
     setNotice("Conversation deleted.");
   }
 
-  function renameChat(id) {
+  function renameChat(chatOrId) {
+    const id = typeof chatOrId === "string" ? chatOrId : chatOrId?.id;
     const chat = chats.find((item) => item.id === id);
     if (!chat) return;
 
@@ -321,7 +324,7 @@ export default function App() {
         continue;
       }
 
-      if (attachedFilesRef.current.some((item) => item.name === file.name)) {
+      if (attachedFilesRef.current.some((item) => item.file.name === file.name)) {
         errors.push(`${file.name}: already attached.`);
         continue;
       }
@@ -331,11 +334,13 @@ export default function App() {
         break;
       }
 
-      newFiles.push(file);
+      newFiles.push({ id: makeId(), file });
     }
 
     if (newFiles.length) {
-      setAttachedFiles((previous) => [...previous, ...newFiles]);
+      const nextFiles = [...attachedFilesRef.current, ...newFiles];
+      attachedFilesRef.current = nextFiles;
+      setAttachedFiles(nextFiles);
       setNotice(
         `${newFiles.length} document(s) added. PDFs will be read when you send your message.`
       );
@@ -344,10 +349,10 @@ export default function App() {
     }
   }
 
-  function removeAttachedFile(index) {
-    setAttachedFiles((previous) =>
-      previous.filter((_, fileIndex) => fileIndex !== index)
-    );
+  function removeAttachedFile(id) {
+    const nextFiles = attachedFilesRef.current.filter((item) => item.id !== id);
+    attachedFilesRef.current = nextFiles;
+    setAttachedFiles(nextFiles);
   }
 
   function handleImageSelection(event) {
@@ -385,7 +390,9 @@ export default function App() {
     }
 
     if (newImages.length) {
-      setSelectedImages((previous) => [...previous, ...newImages]);
+      const nextImages = [...selectedImagesRef.current, ...newImages];
+      selectedImagesRef.current = nextImages;
+      setSelectedImages(nextImages);
       setNotice(`${newImages.length} image(s) added.`);
     } else if (errors.length) {
       setNotice(errors.join(" "));
@@ -402,10 +409,13 @@ export default function App() {
     });
   }
 
-  async function copyMessage(text, id) {
+  async function copyMessage(messageOrText, id) {
+    const message = typeof messageOrText === "object" ? messageOrText : null;
+    const text = message ? getMessageText(message.content) : String(messageOrText ?? "");
+    const messageId = message?.id ?? id;
     try {
       await navigator.clipboard.writeText(text);
-      setCopiedId(id);
+      setCopiedId(messageId);
       window.setTimeout(() => setCopiedId(null), 1500);
     } catch {
       setNotice("Copy failed. Please select and copy the text manually.");
@@ -434,7 +444,7 @@ export default function App() {
       role: "user",
       content: prompt || "Please read and analyse my attachment.",
       attachments: [
-        ...filesToSend.map((file) => ({
+        ...filesToSend.map(({ file }) => ({
           name: file.name,
           type: file.name.toLowerCase().endsWith(".pdf") ? "pdf" : "document"
         })),
@@ -451,7 +461,7 @@ export default function App() {
     const updatedChat = {
       id: chatId,
       title: existingChat?.title ||
-        (prompt || filesToSend[0]?.name || imagesToSend[0]?.name || "New conversation")
+        (prompt || filesToSend[0]?.file?.name || imagesToSend[0]?.name || "New conversation")
           .slice(0, 55),
       updatedAt: Date.now(),
       messages: [...previousMessages, userMessage]
@@ -468,7 +478,8 @@ export default function App() {
     try {
       const documentParts = [];
 
-      for (const file of filesToSend) {
+      for (const item of filesToSend) {
+        const file = item.file;
         const text = await readTextFile(file);
 
         documentParts.push(
