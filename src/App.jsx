@@ -196,14 +196,16 @@ export default function App() {
   const [showMenu, setShowMenu] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [selectedImages, setSelectedImages] = useState([]);
+const textareaRef = useRef(null);
+const [listening, setListening] = useState(false);
+const recognitionRef = useRef(null);
 
-  const textareaRef = useRef(null);
-  const bottomRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const imageInputRef = useRef(null);
-  const attachedFilesRef = useRef([]);
-  const selectedImagesRef = useRef([]);
-  const busyRef = useRef(false);
+const bottomRef = useRef(null);
+const fileInputRef = useRef(null);
+const imageInputRef = useRef(null);
+const attachedFilesRef = useRef([]);
+const selectedImagesRef = useRef([]);
+const busyRef = useRef(false);
 
   const activeChat = chats.find((chat) => chat.id === activeId);
   const messages = activeChat?.messages || [];
