@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
-
 import {
   Sparkles, Plus, History, Search, Settings, CircleHelp,
   Crown, MessageCircle, Code2, Plane, Lightbulb, Paperclip,
@@ -1026,14 +1023,21 @@ export default function App() {
 
                       {message.attachments?.length > 0 && (
                         <div className="message-attachments">
-                          {message.attachments.map((name, attachmentIndex) => (
-                            <span
-                              key={`${name}-${attachmentIndex}`}
-                              className="attachment-item"
-                            >
-                              <Paperclip size={14} /> {name}
-                            </span>
-                          ))}
+                          {message.attachments.map((attachment, attachmentIndex) => {
+                            const attachmentName =
+                              typeof attachment === "string"
+                                ? attachment
+                                : attachment?.name || "Attachment";
+
+                            return (
+                              <span
+                                key={`${attachmentName}-${attachmentIndex}`}
+                                className="attachment-item"
+                              >
+                                <Paperclip size={14} /> {attachmentName}
+                              </span>
+                            );
+                          })}
                         </div>
                       )}
 
