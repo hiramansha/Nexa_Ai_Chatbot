@@ -621,12 +621,68 @@ const busyRef = useRef(false);
           }
         ]
       }));
-    } catch (error) {
+   
+  function startVoiceInput() {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
       setNotice(
-        error.message || "Unable to regenerate the response."
+        "Voice input is not supported in this browser. Please try a supported browser."
       );
-    } finally {
-      setThinking(false);
+      return;
+    }
+
+    if (listening) {
+      recognitionRef.current?.stop();
+      setListening(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    recognition.onstart = () => {
+      setListening(true);
+      setNotice("Listening... Speak now.");
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+
+      setInput((previous) =>
+        previous.trim()
+          ? `${previous.trim()} ${transcript}`
+          : transcript
+      );
+
+      setNotice(
+        "Voice converted to text. Review it and press Send."
+      );
+    };
+
+    recognition.onerror = (event) => {
+      setNotice(
+        event.error === "not-allowed"
+          ? "Microphone permission denied. Allow microphone access in your browser."
+          : `Voice input error: ${event.error}`
+      );
+    };
+
+    recognition.onend = () => {
+      setListening(false);
+      recognitionRef.current = null;
+    };
+
+    recognitionRef.current = recognition;
+
+    try {
+      recognition.start();
+    } catch {
+      setListening(false);
+      setNotice("Could not start the microphone. Please try again.");
     }
   }
 
