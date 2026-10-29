@@ -196,16 +196,14 @@ export default function App() {
   const [showMenu, setShowMenu] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [selectedImages, setSelectedImages] = useState([]);
-const textareaRef = useRef(null);
-const [listening, setListening] = useState(false);
-const recognitionRef = useRef(null);
 
-const bottomRef = useRef(null);
-const fileInputRef = useRef(null);
-const imageInputRef = useRef(null);
-const attachedFilesRef = useRef([]);
-const selectedImagesRef = useRef([]);
-const busyRef = useRef(false);
+  const textareaRef = useRef(null);
+  const bottomRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const attachedFilesRef = useRef([]);
+  const selectedImagesRef = useRef([]);
+  const busyRef = useRef(false);
 
   const activeChat = chats.find((chat) => chat.id === activeId);
   const messages = activeChat?.messages || [];
@@ -621,68 +619,12 @@ const busyRef = useRef(false);
           }
         ]
       }));
-   
-  function startVoiceInput() {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
+    } catch (error) {
       setNotice(
-        "Voice input is not supported in this browser. Please try a supported browser."
+        error.message || "Unable to regenerate the response."
       );
-      return;
-    }
-
-    if (listening) {
-      recognitionRef.current?.stop();
-      setListening(false);
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = "en-US";
-    recognition.interimResults = false;
-    recognition.continuous = false;
-
-    recognition.onstart = () => {
-      setListening(true);
-      setNotice("Listening... Speak now.");
-    };
-
-    recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-
-      setInput((previous) =>
-        previous.trim()
-          ? `${previous.trim()} ${transcript}`
-          : transcript
-      );
-
-      setNotice(
-        "Voice converted to text. Review it and press Send."
-      );
-    };
-
-    recognition.onerror = (event) => {
-      setNotice(
-        event.error === "not-allowed"
-          ? "Microphone permission denied. Allow microphone access in your browser."
-          : `Voice input error: ${event.error}`
-      );
-    };
-
-    recognition.onend = () => {
-      setListening(false);
-      recognitionRef.current = null;
-    };
-
-    recognitionRef.current = recognition;
-
-    try {
-      recognition.start();
-    } catch {
-      setListening(false);
-      setNotice("Could not start the microphone. Please try again.");
+    } finally {
+      setThinking(false);
     }
   }
 
@@ -1291,18 +1233,18 @@ const busyRef = useRef(false);
 
                 <div className="composer-spacer" />
 
-                
-<button
-  type="button"
-  className={`icon-btn ${listening ? "selected" : ""}`}
-  title={listening ? "Stop voice input" : "Start voice input"}
-  aria-label={listening ? "Stop voice input" : "Start voice input"}
-  onClick={startVoiceInput}
-  disabled={thinking}
->
-  <Mic size={18} />
-</button>
-
+                <button
+                  type="button"
+                  className="icon-btn"
+                  title="Voice input is not enabled yet"
+                  onClick={() =>
+                    setNotice(
+                      "Voice input is planned for a future update."
+                    )
+                  }
+                >
+                  <Mic size={18} />
+                </button>
 
                 <button
                   type="submit"
