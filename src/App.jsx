@@ -1291,18 +1291,18 @@ const busyRef = useRef(false);
 
                 <div className="composer-spacer" />
 
-                <button
-                  type="button"
-                  className="icon-btn"
-                  title="Voice input is not enabled yet"
-                  onClick={() =>
-                    setNotice(
-                      "Voice input is planned for a future update."
-                    )
-                  }
-                >
-                  <Mic size={18} />
-                </button>
+                
+<button
+  type="button"
+  className={`icon-btn ${listening ? "selected" : ""}`}
+  title={listening ? "Stop voice input" : "Start voice input"}
+  aria-label={listening ? "Stop voice input" : "Start voice input"}
+  onClick={startVoiceInput}
+  disabled={thinking}
+>
+  <Mic size={18} />
+</button>
+
 
                 <button
                   type="submit"
