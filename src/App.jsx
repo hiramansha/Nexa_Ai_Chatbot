@@ -207,7 +207,45 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [preferences, setPreferences] = useState(readPreferences);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [backendStatus, setBackendStatus] = useState("not-checked");
+  const [checkingBackend, setCheckingBackend] = useState(false);
+  const [supportMessage, setSupportMessage] = useState("");
   const lightMode = preferences.theme === "light";
+
+  async function checkBackendStatus() {
+    setCheckingBackend(true);
+    setBackendStatus("checking");
+    try {
+      const response = await fetch("https://nexa-ai-chatbot.23-st-028.workers.dev/api/health", {
+        method: "GET",
+        headers: { Accept: "application/json" }
+      });
+      const data = await response.json().catch(() => ({}));
+      setBackendStatus(response.ok && data.status === "ok" ? "online" : "offline");
+    } catch {
+      setBackendStatus("offline");
+    } finally {
+      setCheckingBackend(false);
+    }
+  }
+
+  async function copySupportDiagnostics() {
+    const details = [
+      "Nexa AI Support Report",
+      `Date: ${new Date().toLocaleString()}`,
+      `Page: ${window.location.href}`,
+      `Browser: ${navigator.userAgent}`,
+      `Backend status: ${backendStatus}`,
+      `Issue: ${supportMessage.trim() || "Not specified"}`
+    ].join("\n");
+    try {
+      await navigator.clipboard.writeText(details);
+      setNotice("Support details copied. You can paste them into your support message.");
+    } catch {
+      setNotice("Could not copy automatically. Please describe the issue in your message.");
+    }
+  }
 
   function updatePreference(key, value) {
     setPreferences((previous) => {
@@ -822,7 +860,15 @@ export default function App() {
         .nexa-settings-done{border:0;border-radius:10px;padding:11px 22px;background:linear-gradient(110deg,#9945ff,#6525e8);color:white;font-weight:600;cursor:pointer}
         .app.light-mode .nexa-settings-panel{background:#fff;color:#20233b;border-color:#ddd}.app.light-mode .nexa-settings-head p,.app.light-mode .nexa-settings-section>label{color:#626780}
         .app.light-mode .nexa-setting-choice,.app.light-mode .nexa-settings-section select{background:#f2f3fb;color:#20233b;border-color:#dfe1ed}
-        @media(max-width:520px){.nexa-settings-panel{padding:19px}.nexa-settings-footer{align-items:flex-start;flex-direction:column}}
+        .nexa-help-panel{width:min(100%,620px);max-height:90vh;overflow:auto;padding:26px;border:1px solid #51417d;border-radius:22px;background:#11162c;color:#f4f2ff;box-shadow:0 25px 80px #0009}
+        .nexa-help-card{margin:12px 0;padding:15px;border:1px solid #ffffff20;border-radius:13px;background:#191f3a}
+        .nexa-help-card summary{cursor:pointer;font-weight:650;list-style:none}.nexa-help-card summary::-webkit-details-marker{display:none}.nexa-help-card p{margin:10px 0 0;color:#b9bdd5;font-size:13px;line-height:1.65}
+        .nexa-help-status{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px;border:1px solid #ffffff20;border-radius:13px;background:#191f3a}
+        .nexa-help-status strong{display:block;margin-bottom:4px}.nexa-help-status small{color:#aeb4d0}
+        .nexa-help-action{border:1px solid #ffffff25;border-radius:10px;padding:10px 14px;background:#342052;color:#fff;font-weight:600;cursor:pointer}
+        .nexa-help-panel textarea{width:100%;min-height:90px;resize:vertical;padding:12px;border:1px solid #ffffff25;border-radius:10px;background:#191f3a;color:#f4f2ff}
+        .app.light-mode .nexa-help-panel{background:#fff;color:#20233b;border-color:#ddd}.app.light-mode .nexa-help-card,.app.light-mode .nexa-help-status,.app.light-mode .nexa-help-panel textarea{background:#f5f5fb;color:#20233b;border-color:#dfe1ed}.app.light-mode .nexa-help-card p,.app.light-mode .nexa-help-status small{color:#626780}
+        @media(max-width:520px){.nexa-settings-panel,.nexa-help-panel{padding:19px}.nexa-settings-footer{align-items:flex-start;flex-direction:column}}
       `}</style>
 
       {settingsOpen && (
@@ -852,6 +898,41 @@ export default function App() {
               <label className="nexa-settings-check"><input type="checkbox" checked={preferences.enterToSend} onChange={(event) => updatePreference("enterToSend", event.target.checked)}/> Press Enter to send messages</label>
             </div>
             <div className="nexa-settings-footer"><span><Check size={15}/> Preferences save automatically</span><button type="button" className="nexa-settings-done" onClick={() => setSettingsOpen(false)}>Done</button></div>
+          </section>
+        </div>
+      )}
+
+      {helpOpen && (
+        <div className="nexa-settings-overlay" onClick={() => setHelpOpen(false)}>
+          <section className="nexa-help-panel" role="dialog" aria-modal="true" aria-labelledby="nexa-help-title" onClick={(event) => event.stopPropagation()}>
+            <div className="nexa-settings-head">
+              <div><h2 id="nexa-help-title">Help & Support</h2><p>Find quick answers or check your Nexa AI connection.</p></div>
+              <button type="button" className="icon-btn" onClick={() => setHelpOpen(false)} aria-label="Close help"><X size={19}/></button>
+            </div>
+
+            <div className="nexa-help-status">
+              <div><strong>AI service connection</strong><small>{backendStatus === "online" ? "Backend is responding normally." : backendStatus === "offline" ? "Could not reach the backend. Check your connection and try again." : backendStatus === "checking" ? "Checking the service..." : "Run a quick check to see whether Nexa AI is reachable."}</small></div>
+              <button type="button" className="nexa-help-action" onClick={checkBackendStatus} disabled={checkingBackend}>{checkingBackend ? "Checking…" : "Check status"}</button>
+            </div>
+
+            <div className="nexa-settings-section">
+              <h3>Frequently Asked Questions</h3>
+              <details className="nexa-help-card"><summary>Why is Nexa AI not responding?</summary><p>Check your internet connection, then use “Check status” above. If the service is online but chat still fails, refresh the page and try a new chat.</p></details>
+              <details className="nexa-help-card"><summary>How do I save my conversations?</summary><p>Conversation history is saved in this browser. Clearing browser site data or using another browser/device may remove or hide this local history.</p></details>
+              <details className="nexa-help-card"><summary>Which files can I attach?</summary><p>You can attach supported text documents such as TXT, Markdown, CSV, JSON and text-based PDF files. Images can also be attached in JPG, PNG or WEBP format, subject to the size limits shown by the app.</p></details>
+              <details className="nexa-help-card"><summary>How do I change the language or appearance?</summary><p>Open Settings in the sidebar to choose Dark or Light theme, message font size, preferred response language and Enter-to-send behavior.</p></details>
+              <details className="nexa-help-card"><summary>Why is voice input unavailable?</summary><p>Use a supported browser such as Chrome or Edge, allow microphone permission for this site, and check that your microphone is connected.</p></details>
+            </div>
+
+            <div className="nexa-settings-section">
+              <h3>Report an issue</h3>
+              <label htmlFor="nexa-support-message">Tell us what went wrong</label>
+              <textarea id="nexa-support-message" value={supportMessage} onChange={(event) => setSupportMessage(event.target.value)} placeholder="Describe the problem and what you were doing when it happened…" maxLength={1500}/>
+              <div className="nexa-settings-footer" style={{marginTop:14}}>
+                <span><Check size={15}/> Copy a diagnostic report to share with support</span>
+                <button type="button" className="nexa-settings-done" onClick={copySupportDiagnostics}>Copy support report</button>
+              </div>
+            </div>
           </section>
         </div>
       )}
@@ -1019,11 +1100,12 @@ export default function App() {
               <button
                 type="button"
                 className="side-link"
-                onClick={() =>
-                  setNotice(
-                    "Nexa AI support: check the backend status and try again."
-                  )
-                }
+                onClick={() => {
+                  setHelpOpen(true);
+                  setSidebarOpen(false);
+                  setNotice("");
+                  setBackendStatus("not-checked");
+                }}
               >
                 <CircleHelp size={19} /> Help & Support
               </button>
