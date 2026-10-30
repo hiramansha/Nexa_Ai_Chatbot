@@ -12,6 +12,22 @@ import {
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 const STORAGE_KEY = "nexa-ai-chats-v1";
+const PREFERENCES_KEY = "nexa-ai-preferences-v1";
+const DEFAULT_PREFERENCES = {
+  theme: "dark",
+  fontSize: "medium",
+  responseLanguage: "auto",
+  enterToSend: true
+};
+
+function readPreferences() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PREFERENCES_KEY) || "{}");
+    return { ...DEFAULT_PREFERENCES, ...(saved && typeof saved === "object" ? saved : {}) };
+  } catch {
+    return DEFAULT_PREFERENCES;
+  }
+}
 const API_URL = "https://nexa-ai-chatbot.23-st-028.workers.dev/api/chat";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const MAX_EXTRACTED_TEXT = 10000;
@@ -189,7 +205,21 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [lightMode, setLightMode] = useState(false);
+  const [preferences, setPreferences] = useState(readPreferences);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const lightMode = preferences.theme === "light";
+
+  function updatePreference(key, value) {
+    setPreferences((previous) => {
+      const updated = { ...previous, [key]: value };
+      try {
+        localStorage.setItem(PREFERENCES_KEY, JSON.stringify(updated));
+      } catch {
+        setNotice("Could not save preferences in this browser.");
+      }
+      return updated;
+    });
+  }
   const [thinking, setThinking] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
   const [notice, setNotice] = useState("");
@@ -222,6 +252,10 @@ export default function App() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, thinking]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = preferences.theme;
+  }, [preferences.theme]);
 
   useEffect(() => {
     attachedFilesRef.current = attachedFiles;
@@ -757,7 +791,8 @@ export default function App() {
     if (
       event.key === "Enter" &&
       !event.shiftKey &&
-      !event.nativeEvent?.isComposing
+      !event.nativeEvent?.isComposing &&
+      preferences.enterToSend
     ) {
       event.preventDefault();
       handleSubmit(event);
@@ -771,6 +806,56 @@ export default function App() {
 
   return (
     <div className={`app ${lightMode ? "light-mode" : ""}`}>
+      <style>{`
+        .nexa-settings-overlay{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:rgba(3,5,16,.76);backdrop-filter:blur(8px)}
+        .nexa-settings-panel{width:min(100%,500px);max-height:90vh;overflow:auto;padding:26px;border:1px solid #51417d;border-radius:22px;background:#11162c;color:#f4f2ff;box-shadow:0 25px 80px #0009}
+        .nexa-settings-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:22px}
+        .nexa-settings-head h2{margin:0 0 7px;font-size:23px}.nexa-settings-head p{margin:0;color:#a8acc8;font-size:13px}
+        .nexa-settings-section{padding:18px 0;border-top:1px solid #ffffff18}.nexa-settings-section h3{margin:0 0 14px;font-size:16px}
+        .nexa-settings-section>label{display:block;margin:13px 0 8px;color:#b9bdd5;font-size:13px}
+        .nexa-settings-options{display:flex;gap:10px}.nexa-setting-choice{flex:1;display:flex;justify-content:center;align-items:center;gap:8px;padding:12px;border:1px solid #ffffff25;border-radius:11px;background:#191f3a;color:#eee;cursor:pointer}
+        .nexa-setting-choice.active{border-color:#a05cff;background:#38215e}
+        .nexa-settings-section select{width:100%;padding:12px;border:1px solid #ffffff25;border-radius:10px;background:#191f3a;color:#f4f2ff}
+        .nexa-settings-check{display:flex!important;align-items:center;gap:10px;cursor:pointer}.nexa-settings-check input{accent-color:#9147ff;width:17px;height:17px}
+        .nexa-settings-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-top:16px;border-top:1px solid #ffffff18}
+        .nexa-settings-footer span{display:flex;align-items:center;gap:6px;color:#a9e7c2;font-size:12px}
+        .nexa-settings-done{border:0;border-radius:10px;padding:11px 22px;background:linear-gradient(110deg,#9945ff,#6525e8);color:white;font-weight:600;cursor:pointer}
+        .app.light-mode .nexa-settings-panel{background:#fff;color:#20233b;border-color:#ddd}.app.light-mode .nexa-settings-head p,.app.light-mode .nexa-settings-section>label{color:#626780}
+        .app.light-mode .nexa-setting-choice,.app.light-mode .nexa-settings-section select{background:#f2f3fb;color:#20233b;border-color:#dfe1ed}
+        @media(max-width:520px){.nexa-settings-panel{padding:19px}.nexa-settings-footer{align-items:flex-start;flex-direction:column}}
+      `}</style>
+
+      {settingsOpen && (
+        <div className="nexa-settings-overlay" onClick={() => setSettingsOpen(false)}>
+          <section className="nexa-settings-panel" role="dialog" aria-modal="true" aria-labelledby="nexa-settings-title" onClick={(event) => event.stopPropagation()}>
+            <div className="nexa-settings-head">
+              <div><h2 id="nexa-settings-title">Nexa AI Settings</h2><p>Customize your chat experience.</p></div>
+              <button type="button" className="icon-btn" onClick={() => setSettingsOpen(false)} aria-label="Close settings"><X size={19}/></button>
+            </div>
+            <div className="nexa-settings-section">
+              <h3>Appearance</h3><label>Choose theme</label>
+              <div className="nexa-settings-options">
+                <button type="button" className={`nexa-setting-choice ${preferences.theme === "dark" ? "active" : ""}`} onClick={() => updatePreference("theme", "dark")}><Moon size={17}/> Dark</button>
+                <button type="button" className={`nexa-setting-choice ${preferences.theme === "light" ? "active" : ""}`} onClick={() => updatePreference("theme", "light")}><Sun size={17}/> Light</button>
+              </div>
+            </div>
+            <div className="nexa-settings-section">
+              <h3>Chat Preferences</h3>
+              <label htmlFor="nexa-font-size">Message font size</label>
+              <select id="nexa-font-size" value={preferences.fontSize} onChange={(event) => updatePreference("fontSize", event.target.value)}>
+                <option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option>
+              </select>
+              <label htmlFor="nexa-response-language">Preferred response language</label>
+              <select id="nexa-response-language" value={preferences.responseLanguage} onChange={(event) => updatePreference("responseLanguage", event.target.value)}>
+                <option value="auto">Automatic (match my message)</option><option value="english">English</option><option value="roman-urdu">Roman Urdu</option>
+              </select>
+              <label className="nexa-settings-check"><input type="checkbox" checked={preferences.enterToSend} onChange={(event) => updatePreference("enterToSend", event.target.checked)}/> Press Enter to send messages</label>
+            </div>
+            <div className="nexa-settings-footer"><span><Check size={15}/> Preferences save automatically</span><button type="button" className="nexa-settings-done" onClick={() => setSettingsOpen(false)}>Done</button></div>
+          </section>
+        </div>
+      )}
+
       <div className="browser">
         <div className="browser-bar">
           <div className="traffic">
@@ -785,7 +870,7 @@ export default function App() {
             type="button"
             className="icon-btn"
             title={lightMode ? "Dark mode" : "Light mode"}
-            onClick={() => setLightMode((value) => !value)}
+            onClick={() => updatePreference("theme", lightMode ? "dark" : "light")}
           >
             {lightMode ? <Moon size={16} /> : <Sun size={16} />}
           </button>
@@ -922,9 +1007,11 @@ export default function App() {
               <button
                 type="button"
                 className="side-link"
-                onClick={() =>
-                  setNotice("Theme and chat preferences are available here.")
-                }
+                onClick={() => {
+                  setSettingsOpen(true);
+                  setSidebarOpen(false);
+                  setNotice("");
+                }}
               >
                 <Settings size={19} /> Settings
               </button>
@@ -1059,7 +1146,7 @@ export default function App() {
                       type="button"
                       className="side-link"
                       onClick={() => {
-                        setLightMode((value) => !value);
+                        updatePreference("theme", lightMode ? "dark" : "light");
                         setShowMenu(false);
                       }}
                     >
@@ -1134,7 +1221,12 @@ export default function App() {
                         {message.role === "user" ? "You" : "Nexa AI"}
                       </div>
 
-                      <div className="message-content">
+                      <div
+                        className="message-content"
+                        style={{
+                          fontSize: preferences.fontSize === "small" ? "14px" : preferences.fontSize === "large" ? "19px" : "16px"
+                        }}
+                      >
                         {getMessageText(message.content)}
                       </div>
 
