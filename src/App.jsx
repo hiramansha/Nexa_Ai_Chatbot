@@ -208,6 +208,7 @@ export default function App() {
   const [preferences, setPreferences] = useState(readPreferences);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [proOpen, setProOpen] = useState(false);
   const [backendStatus, setBackendStatus] = useState("not-checked");
   const [checkingBackend, setCheckingBackend] = useState(false);
   const [supportMessage, setSupportMessage] = useState("");
@@ -861,6 +862,17 @@ export default function App() {
         .app.light-mode .nexa-settings-panel{background:#fff;color:#20233b;border-color:#ddd}.app.light-mode .nexa-settings-head p,.app.light-mode .nexa-settings-section>label{color:#626780}
         .app.light-mode .nexa-setting-choice,.app.light-mode .nexa-settings-section select{background:#f2f3fb;color:#20233b;border-color:#dfe1ed}
         .nexa-help-panel{width:min(100%,620px);max-height:90vh;overflow:auto;padding:26px;border:1px solid #51417d;border-radius:22px;background:#11162c;color:#f4f2ff;box-shadow:0 25px 80px #0009}
+        .nexa-pro-hero{position:relative;overflow:hidden;margin:8px 0 18px;padding:24px;border:1px solid #a56bff55;border-radius:18px;background:radial-gradient(circle at 85% 15%,#8b4dff55,transparent 42%),linear-gradient(135deg,#21143f,#171d39 75%)}
+        .nexa-pro-hero h3{margin:0 0 8px;font-size:22px}.nexa-pro-hero p{margin:0;color:#c7c0e2;font-size:13px;line-height:1.65}
+        .nexa-pro-list{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0}
+        .nexa-pro-feature{display:flex;align-items:center;gap:10px;padding:13px;border:1px solid #ffffff20;border-radius:12px;background:#191f3a;color:#e9e5fa;font-size:13px}
+        .nexa-pro-feature svg{flex:none;color:#c39aff}
+        .nexa-pro-status{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;border:1px solid #ffffff20;border-radius:13px;background:#191f3a}
+        .nexa-pro-status strong{display:block;margin-bottom:4px}.nexa-pro-status small{color:#aeb4d0}
+        .nexa-pro-badge{padding:6px 10px;border-radius:20px;background:#3b2b17;color:#ffd58b;font-size:11px;font-weight:750;white-space:nowrap}
+        .app.light-mode .nexa-pro-hero{background:linear-gradient(135deg,#f0e7ff,#f5f3ff);border-color:#d7c2ff}.app.light-mode .nexa-pro-hero p{color:#5f5877}
+        .app.light-mode .nexa-pro-feature,.app.light-mode .nexa-pro-status{background:#f5f5fb;color:#20233b;border-color:#dfe1ed}.app.light-mode .nexa-pro-status small{color:#626780}
+        @media(max-width:520px){.nexa-pro-list{grid-template-columns:1fr}}
         .nexa-help-card{margin:12px 0;padding:15px;border:1px solid #ffffff20;border-radius:13px;background:#191f3a}
         .nexa-help-card summary{cursor:pointer;font-weight:650;list-style:none}.nexa-help-card summary::-webkit-details-marker{display:none}.nexa-help-card p{margin:10px 0 0;color:#b9bdd5;font-size:13px;line-height:1.65}
         .nexa-help-status{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px;border:1px solid #ffffff20;border-radius:13px;background:#191f3a}
@@ -932,6 +944,53 @@ export default function App() {
                 <span><Check size={15}/> Copy a diagnostic report to share with support</span>
                 <button type="button" className="nexa-settings-done" onClick={copySupportDiagnostics}>Copy support report</button>
               </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {proOpen && (
+        <div className="nexa-settings-overlay" onClick={() => setProOpen(false)}>
+          <section
+            className="nexa-help-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="nexa-pro-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="nexa-settings-head">
+              <div>
+                <h2 id="nexa-pro-title"><Crown size={22} style={{ verticalAlign: "middle", color: "#c39aff" }} /> Nexa AI Pro</h2>
+                <p>Explore a premium AI experience with more possibilities and powerful features.</p>
+              </div>
+              <button type="button" className="icon-btn" onClick={() => setProOpen(false)} aria-label="Close Pro window">
+                <X size={19} />
+              </button>
+            </div>
+
+            <div className="nexa-pro-hero">
+              <h3>More power for your ideas.</h3>
+              <p>We are planning additional tools and enhanced capabilities to make your Nexa AI experience even more useful.</p>
+            </div>
+
+            <div className="nexa-pro-list">
+              <div className="nexa-pro-feature"><Sparkles size={18} /> Advanced AI capabilities</div>
+              <div className="nexa-pro-feature"><RefreshCw size={18} /> Priority response experience</div>
+              <div className="nexa-pro-feature"><Paperclip size={18} /> Extended document tools</div>
+              <div className="nexa-pro-feature"><Lightbulb size={18} /> More creative features</div>
+            </div>
+
+            <div className="nexa-pro-status">
+              <div>
+                <strong>Pro membership</strong>
+                <small>Premium plans are planned for a future update.</small>
+              </div>
+              <span className="nexa-pro-badge">Coming Soon</span>
+            </div>
+
+            <div className="nexa-settings-footer" style={{ marginTop: 18 }}>
+              <span><Check size={15} /> No payment is being taken.</span>
+              <button type="button" className="nexa-settings-done" onClick={() => setProOpen(false)}>Got it</button>
             </div>
           </section>
         </div>
@@ -1126,11 +1185,11 @@ export default function App() {
                 <button
                   type="button"
                   className="primary-btn"
-                  onClick={() =>
-                    setNotice(
-                      "Pro plans are a future feature. No payment is being taken."
-                    )
-                  }
+                  onClick={() => {
+                    setProOpen(true);
+                    setSidebarOpen(false);
+                    setNotice("");
+                  }}
                 >
                   Explore Pro <span>→</span>
                 </button>
