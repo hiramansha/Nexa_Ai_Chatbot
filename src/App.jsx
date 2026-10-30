@@ -6,7 +6,7 @@ import {
   Crown, MessageCircle, Code2, Plane, Lightbulb, Paperclip,
   Image as ImageIcon, Brain, Mic, Send, Menu, X, ChevronDown,
   MoreHorizontal, Sun, Moon, Copy, Check, RefreshCw, Trash2,
-  LogOut
+  LogOut, Volume2
 } from "lucide-react";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -196,6 +196,7 @@ export default function App() {
   const [showMenu, setShowMenu] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [selectedImages, setSelectedImages] = useState([]);
+  const [speakingId, setSpeakingId] = useState(null);
 
   const textareaRef = useRef(null);
   const [listening, setListening] = useState(false);
@@ -235,6 +236,14 @@ export default function App() {
       selectedImagesRef.current.forEach((image) => {
         URL.revokeObjectURL(image.preview);
       });
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
     };
   }, []);
 
@@ -692,6 +701,50 @@ export default function App() {
     }
   }
 
+  function stopSpeaking() {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+
+    setSpeakingId(null);
+  }
+
+  function speakMessage(message) {
+    if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
+      setNotice("Voice response is not supported in this browser. Please try Chrome or Edge.");
+      return;
+    }
+
+    if (speakingId === message.id) {
+      stopSpeaking();
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const text = getMessageText(message.content).trim();
+
+    if (!text) {
+      setNotice("There is no text available to read aloud.");
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = /[\u0600-\u06FF]/.test(text) ? "ur-PK" : "en-US";
+    utterance.rate = 1;
+    utterance.pitch = 1;
+
+    utterance.onstart = () => setSpeakingId(message.id);
+    utterance.onend = () => setSpeakingId(null);
+    utterance.onerror = () => {
+      setSpeakingId(null);
+      setNotice("Could not play the voice response. Please try again.");
+    };
+
+    setSpeakingId(message.id);
+    window.speechSynthesis.speak(utterance);
+  }
+
   function handleSubmit(event) {
     event.preventDefault();
 
@@ -1117,6 +1170,16 @@ export default function App() {
                               <Copy size={14} />
                             )}
                             {copiedId === message.id ? "Copied" : "Copy"}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => speakMessage(message)}
+                            disabled={thinking}
+                            title={speakingId === message.id ? "Stop reading" : "Read response aloud"}
+                          >
+                            <Volume2 size={14} />
+                            {speakingId === message.id ? "Stop" : "Read Aloud"}
                           </button>
 
                           <button
