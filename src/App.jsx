@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import AuthGate from "./AuthGate";
+import { supabase } from "./supabaseClient";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import {
@@ -198,7 +200,7 @@ function getMessageText(content) {
   return "";
 }
 
-export default function App() {
+function ChatDashboard() {
   const [chats, setChats] = useState(readChats);
   const [activeId, setActiveId] = useState(null);
   const [input, setInput] = useState("");
@@ -262,6 +264,7 @@ export default function App() {
   const [thinking, setThinking] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
   const [notice, setNotice] = useState("");
+  const [currentUser, setCurrentUser] = useState(null);
   const [showMenu, setShowMenu] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [selectedImages, setSelectedImages] = useState([]);
@@ -276,6 +279,28 @@ export default function App() {
   const attachedFilesRef = useRef([]);
   const selectedImagesRef = useRef([]);
   const busyRef = useRef(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getUser().then(({ data, error }) => {
+      if (mounted && !error) setCurrentUser(data.user ?? null);
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCurrentUser(session?.user ?? null);
+    });
+
+    return () => {
+      mounted = false;
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  async function handleLogout() {
+    const { error } = await supabase.auth.signOut();
+    if (error) setNotice(`Logout failed: ${error.message}`);
+  }
 
   const activeChat = chats.find((chat) => chat.id === activeId);
   const messages = activeChat?.messages || [];
@@ -1196,16 +1221,26 @@ export default function App() {
               </div>
 
               <div className="profile">
-                <div className="avatar">N</div>
-
-                <div>
-                  <div className="profile-name">Nexa User</div>
-                  <div className="profile-email">Guest workspace</div>
+                <div className="avatar">
+                  {(currentUser?.user_metadata?.full_name || currentUser?.email || "N").charAt(0).toUpperCase()}
                 </div>
 
-                <span style={{ marginLeft: "auto", color: "#a6a9ce" }}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="profile-name">
+                    {currentUser?.user_metadata?.full_name || currentUser?.email?.split("@")[0] || "Nexa User"}
+                  </div>
+                  <div className="profile-email">{currentUser?.email || "Signed in"}</div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  title="Log out"
+                  aria-label="Log out"
+                  style={{ marginLeft: "auto", color: "#a6a9ce", background: "transparent", border: 0, cursor: "pointer", padding: 8 }}
+                >
                   <LogOut size={17} />
-                </span>
+                </button>
               </div>
             </div>
           </aside>
@@ -1623,5 +1658,13 @@ export default function App() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthGate>
+      <ChatDashboard />
+    </AuthGate>
   );
 }
