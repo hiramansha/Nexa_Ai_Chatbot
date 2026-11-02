@@ -17,9 +17,19 @@ const STORAGE_KEY = "nexa-ai-chats-v1";
 const PREFERENCES_KEY = "nexa-ai-preferences-v1";
 const DEFAULT_PREFERENCES = {
   theme: "dark",
+  accent: "violet",
   fontSize: "medium",
   responseLanguage: "auto",
   enterToSend: true
+};
+
+const ACCENT_THEMES = {
+  violet: { primary: "#8b5cf6", secondary: "#6d42e8", soft: "rgba(139,92,246,.16)" },
+  blue: { primary: "#3b82f6", secondary: "#2563eb", soft: "rgba(59,130,246,.16)" },
+  teal: { primary: "#14b8a6", secondary: "#0f9488", soft: "rgba(20,184,166,.16)" },
+  pink: { primary: "#ec4899", secondary: "#db2777", soft: "rgba(236,72,153,.16)" },
+  green: { primary: "#22c55e", secondary: "#16a34a", soft: "rgba(34,197,94,.16)" },
+  amber: { primary: "#f59e0b", secondary: "#d97706", soft: "rgba(245,158,11,.16)" }
 };
 
 function readPreferences() {
@@ -215,7 +225,6 @@ function ChatDashboard() {
   const [checkingBackend, setCheckingBackend] = useState(false);
   const [supportMessage, setSupportMessage] = useState("");
   const lightMode = preferences.theme === "light";
-
   async function checkBackendStatus() {
     setCheckingBackend(true);
     setBackendStatus("checking");
@@ -265,6 +274,17 @@ function ChatDashboard() {
   const [copiedId, setCopiedId] = useState(null);
   const [notice, setNotice] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
+  const activeAccent = ACCENT_THEMES[preferences.accent] || ACCENT_THEMES.violet;
+  const displayName =
+    currentUser?.user_metadata?.full_name ||
+    currentUser?.user_metadata?.name ||
+    currentUser?.user_metadata?.preferred_username ||
+    currentUser?.email?.split("@")[0] ||
+    "there";
+  const avatarUrl =
+    currentUser?.user_metadata?.avatar_url ||
+    currentUser?.user_metadata?.picture ||
+    "";
   const [showMenu, setShowMenu] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [selectedImages, setSelectedImages] = useState([]);
@@ -869,7 +889,14 @@ function ChatDashboard() {
     .sort((a, b) => b.updatedAt - a.updatedAt);
 
   return (
-    <div className={`app ${lightMode ? "light-mode" : ""}`}>
+    <div
+      className={`app ${lightMode ? "light-mode" : ""}`}
+      style={{
+        "--accent": activeAccent.primary,
+        "--accent-strong": activeAccent.secondary,
+        "--accent-soft": activeAccent.soft
+      }}
+    >
       <style>{`
         .nexa-settings-overlay{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:rgba(3,5,16,.76);backdrop-filter:blur(8px)}
         .nexa-settings-panel{width:min(100%,500px);max-height:90vh;overflow:auto;padding:26px;border:1px solid #51417d;border-radius:22px;background:#11162c;color:#f4f2ff;box-shadow:0 25px 80px #0009}
@@ -906,6 +933,21 @@ function ChatDashboard() {
         .nexa-help-panel textarea{width:100%;min-height:90px;resize:vertical;padding:12px;border:1px solid #ffffff25;border-radius:10px;background:#191f3a;color:#f4f2ff}
         .app.light-mode .nexa-help-panel{background:#fff;color:#20233b;border-color:#ddd}.app.light-mode .nexa-help-card,.app.light-mode .nexa-help-status,.app.light-mode .nexa-help-panel textarea{background:#f5f5fb;color:#20233b;border-color:#dfe1ed}.app.light-mode .nexa-help-card p,.app.light-mode .nexa-help-status small{color:#626780}
         @media(max-width:520px){.nexa-settings-panel,.nexa-help-panel{padding:19px}.nexa-settings-footer{align-items:flex-start;flex-direction:column}}
+        .nexa-accent-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:10px}
+        .nexa-accent-choice{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid #ffffff20;border-radius:11px;background:#191f3a;color:#eee;cursor:pointer}
+        .nexa-accent-choice span{width:17px;height:17px;flex:none;border-radius:50%;background:var(--swatch);box-shadow:0 0 0 3px color-mix(in srgb,var(--swatch),transparent 78%)}
+        .nexa-accent-choice small{text-transform:capitalize;font-size:12px}
+        .nexa-accent-choice.active{border-color:var(--swatch);background:color-mix(in srgb,var(--swatch),transparent 84%)}
+        .app.light-mode .nexa-accent-choice{background:#f5f5fb;color:#20233b;border-color:#dfe1ed}
+        .app{--nexa-accent:var(--accent,#8b5cf6);--nexa-accent-strong:var(--accent-strong,#6d42e8);--nexa-accent-soft:var(--accent-soft,rgba(139,92,246,.16))}
+        .app .primary-btn,.app .send-btn,.app .nexa-settings-done{background:linear-gradient(120deg,var(--nexa-accent),var(--nexa-accent-strong))}
+        .app .brand-name span,.app .gradient-text{background:linear-gradient(100deg,var(--nexa-accent),#60a5fa);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .app .recent-item.active,.app .recent-item:hover{border-color:var(--nexa-accent-soft)}
+        .app .composer:focus-within{border-color:var(--nexa-accent)}
+        .nexa-welcome-user{display:flex;align-items:center;justify-content:center;gap:10px;margin:0 0 15px;color:var(--nexa-muted,#9da8c8);font-size:14px}
+        .nexa-welcome-avatar{width:34px;height:34px;border-radius:50%;object-fit:cover;border:2px solid var(--nexa-accent)}
+        .nexa-welcome-initial{width:34px;height:34px;display:grid;place-items:center;border-radius:50%;background:var(--nexa-accent-soft);color:var(--nexa-text);font-weight:700}
+        @media(max-width:520px){.nexa-accent-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
       `}</style>
 
       {settingsOpen && (
@@ -920,6 +962,24 @@ function ChatDashboard() {
               <div className="nexa-settings-options">
                 <button type="button" className={`nexa-setting-choice ${preferences.theme === "dark" ? "active" : ""}`} onClick={() => updatePreference("theme", "dark")}><Moon size={17}/> Dark</button>
                 <button type="button" className={`nexa-setting-choice ${preferences.theme === "light" ? "active" : ""}`} onClick={() => updatePreference("theme", "light")}><Sun size={17}/> Light</button>
+              </div>
+              <label>Accent color</label>
+              <div className="nexa-accent-grid" role="group" aria-label="Accent color">
+                {Object.entries(ACCENT_THEMES).map(([key, color]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`nexa-accent-choice ${preferences.accent === key ? "active" : ""}`}
+                    style={{ "--swatch": color.primary }}
+                    onClick={() => updatePreference("accent", key)}
+                    aria-label={`${key} accent color`}
+                    aria-pressed={preferences.accent === key}
+                    title={key.charAt(0).toUpperCase() + key.slice(1)}
+                  >
+                    <span />
+                    <small>{key.charAt(0).toUpperCase() + key.slice(1)}</small>
+                  </button>
+                ))}
               </div>
             </div>
             <div className="nexa-settings-section">
@@ -1342,6 +1402,15 @@ function ChatDashboard() {
               <div className="welcome">
                 <div className="orb" aria-label="Nexa AI glowing orb">
                   <div className="orb-core" />
+                </div>
+
+                <div className="nexa-welcome-user">
+                  {avatarUrl ? (
+                    <img className="nexa-welcome-avatar" src={avatarUrl} alt="" referrerPolicy="no-referrer" />
+                  ) : (
+                    <span className="nexa-welcome-initial">{displayName.charAt(0).toUpperCase()}</span>
+                  )}
+                  <span>Welcome back, <strong>{displayName}</strong></span>
                 </div>
 
                 <h1>

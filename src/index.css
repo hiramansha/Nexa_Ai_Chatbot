@@ -1,4 +1,5 @@
 
+
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap");
 
 :root {
@@ -1567,4 +1568,400 @@ body {
 .attachment-preview img {
   flex-shrink: 0;
   object-fit: cover;
+}
+
+/* =========================================================
+   NEXA AI — PROFESSIONAL THEME UPDATE
+   Keeps the original dashboard layout and attachment styles.
+   Accent colors are controlled by the React app's CSS variables.
+   ========================================================= */
+
+:root {
+  --nexa-accent: #8b5cf6;
+  --nexa-accent-strong: #6d42e8;
+  --nexa-accent-soft: rgba(139, 92, 246, 0.16);
+  --nexa-focus-ring: rgba(139, 92, 246, 0.24);
+  color-scheme: dark;
+}
+
+.app {
+  --nexa-accent: var(--accent, #8b5cf6);
+  --nexa-accent-strong: var(--accent-strong, #6d42e8);
+  --nexa-accent-soft: var(--accent-soft, rgba(139, 92, 246, 0.16));
+  --nexa-focus-ring: var(--nexa-accent-soft);
+}
+
+button,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--nexa-accent, #8b5cf6);
+  outline-offset: 3px;
+}
+
+.primary-btn,
+.send-btn,
+.nexa-settings-done {
+  background: linear-gradient(
+    120deg,
+    var(--nexa-accent, #8b5cf6),
+    var(--nexa-accent-strong, #6d42e8)
+  );
+}
+
+.primary-btn {
+  border-color: color-mix(in srgb, var(--nexa-accent, #8b5cf6), transparent 55%);
+  box-shadow: 0 8px 24px var(--nexa-accent-soft, rgba(139, 92, 246, .16));
+}
+
+.brand-name span,
+.gradient-text {
+  background: linear-gradient(
+    100deg,
+    var(--nexa-accent, #8b5cf6),
+    #60a5fa 55%,
+    #c084fc
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.brand-mark {
+  box-shadow:
+    0 8px 28px var(--nexa-accent-soft, rgba(139, 92, 246, .16)),
+    inset 0 1px 0 rgba(255,255,255,.24);
+}
+
+.recent-item:hover,
+.recent-item.active {
+  border-color: var(--nexa-accent-soft, rgba(139, 92, 246, .16));
+}
+
+.recent-item.active {
+  box-shadow: inset 3px 0 var(--nexa-accent, #8b5cf6);
+}
+
+.composer:focus-within {
+  border-color: var(--nexa-accent, #8b5cf6);
+  box-shadow:
+    0 0 0 3px var(--nexa-focus-ring, rgba(139, 92, 246, .24)),
+    0 12px 38px rgba(0,0,0,.16);
+}
+
+.suggestion:hover {
+  border-color: var(--nexa-accent, #8b5cf6);
+  box-shadow: 0 12px 32px var(--nexa-accent-soft, rgba(139, 92, 246, .16));
+}
+
+.tool-pill.selected,
+.tool-pill:focus-visible {
+  border-color: var(--nexa-accent, #8b5cf6);
+  background: var(--nexa-accent-soft, rgba(139, 92, 246, .16));
+}
+
+.message.user .message-content {
+  border-color: var(--nexa-accent-soft, rgba(139, 92, 246, .16));
+}
+
+/* Personalized profile/welcome elements used by App.jsx */
+.nexa-welcome-user {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 0 15px;
+  color: var(--nexa-muted, #9da8c8);
+  font-size: 14px;
+}
+
+.nexa-welcome-avatar {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border: 2px solid var(--nexa-accent, #8b5cf6);
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 0 4px var(--nexa-accent-soft, rgba(139, 92, 246, .16));
+}
+
+.nexa-welcome-initial {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--nexa-accent-soft, rgba(139, 92, 246, .16));
+  border-radius: 50%;
+  background: var(--nexa-accent-soft, rgba(139, 92, 246, .16));
+  color: var(--nexa-text, #f5f5ff);
+  font-weight: 700;
+}
+
+/* Accent picker inside Nexa AI Settings */
+.nexa-accent-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 10px;
+}
+
+.nexa-accent-choice {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 11px;
+  background: rgba(255,255,255,.045);
+  color: inherit;
+  cursor: pointer;
+}
+
+.nexa-accent-choice span {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  border-radius: 50%;
+  background: var(--swatch);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--swatch), transparent 82%);
+}
+
+.nexa-accent-choice small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: capitalize;
+  font-size: 12px;
+}
+
+.nexa-accent-choice:hover,
+.nexa-accent-choice.active {
+  border-color: var(--swatch);
+  background: color-mix(in srgb, var(--swatch), transparent 88%);
+}
+
+/* Light theme: consistent contrast across the complete workspace */
+.app.light-mode {
+  --nexa-bg: #f5f6fc;
+  --nexa-panel: #ffffff;
+  --nexa-card: #ffffff;
+  --nexa-border: rgba(108, 91, 160, 0.18);
+  --nexa-text: #20243a;
+  --nexa-muted: #707792;
+  color: var(--nexa-text);
+  background:
+    radial-gradient(ellipse at 78% 8%, rgba(173, 151, 255, .20), transparent 38%),
+    #f5f6fc;
+  color-scheme: light;
+}
+
+.app.light-mode .browser,
+.app.light-mode .sidebar {
+  background: rgba(251, 251, 255, .98);
+}
+
+.app.light-mode .sidebar {
+  border-right-color: #e5e5f0;
+}
+
+.app.light-mode .main-panel {
+  background:
+    radial-gradient(ellipse at 50% 15%, rgba(195, 177, 255, .25), transparent 55%),
+    #f5f6fc;
+}
+
+.app.light-mode .top-controls {
+  background: rgba(251, 251, 255, .88);
+  border-bottom-color: #e7e6f1;
+}
+
+.app.light-mode .section-label,
+.app.light-mode .side-link,
+.app.light-mode .brand-name,
+.app.light-mode .welcome h1 {
+  color: #252943;
+}
+
+.app.light-mode .brand-caption,
+.app.light-mode .subtitle,
+.app.light-mode .profile-email,
+.app.light-mode .message-role {
+  color: #707792;
+}
+
+.app.light-mode .icon-btn {
+  color: #626985;
+}
+
+.app.light-mode .icon-btn:hover,
+.app.light-mode .side-link:hover {
+  color: #292d49;
+  background: rgba(108, 91, 160, .08);
+}
+
+.app.light-mode .recent-item {
+  color: #343852;
+}
+
+.app.light-mode .recent-item:hover,
+.app.light-mode .recent-item.active {
+  background: var(--nexa-accent-soft, rgba(139, 92, 246, .12));
+}
+
+.app.light-mode .upgrade {
+  background: linear-gradient(145deg, #f0eaff, #ffffff);
+  border-color: #ded0ff;
+}
+
+.app.light-mode .upgrade p {
+  color: #68708b;
+}
+
+.app.light-mode .model-select,
+.app.light-mode .more-btn {
+  background: rgba(255,255,255,.94);
+  border-color: #e3e2ee;
+  color: #292d49;
+}
+
+.app.light-mode .composer {
+  background: rgba(255,255,255,.96);
+  border-color: color-mix(in srgb, var(--nexa-accent, #8b5cf6), white 48%);
+  box-shadow: 0 12px 38px rgba(40, 34, 80, .09);
+}
+
+.app.light-mode .composer textarea {
+  color: #252943;
+}
+
+.app.light-mode .composer textarea::placeholder {
+  color: #858ba3;
+}
+
+.app.light-mode .tool-pill {
+  background: #f3f2fb;
+  border-color: #e5e3f0;
+  color: #444967;
+}
+
+.app.light-mode .tool-pill:hover {
+  background: #ebe8f8;
+}
+
+.app.light-mode .message:not(.user) .message-content {
+  background: #ffffff;
+  color: #30344d;
+  border-color: #e5e6f0;
+  box-shadow: 0 5px 20px rgba(40, 34, 80, .035);
+}
+
+.app.light-mode .message.user .message-content {
+  background: var(--nexa-accent-soft, rgba(139, 92, 246, .12));
+  color: #292744;
+}
+
+.app.light-mode .message-actions button {
+  color: #747b96;
+}
+
+.app.light-mode .empty-history {
+  color: #7b8199;
+}
+
+.app.light-mode .nexa-settings-panel,
+.app.light-mode .nexa-help-panel {
+  background: #ffffff;
+  color: #20233b;
+  border-color: #e1e1ed;
+}
+
+.app.light-mode .nexa-settings-head p,
+.app.light-mode .nexa-settings-section > label {
+  color: #626780;
+}
+
+.app.light-mode .nexa-setting-choice,
+.app.light-mode .nexa-settings-section select,
+.app.light-mode .nexa-help-card,
+.app.light-mode .nexa-help-status,
+.app.light-mode .nexa-help-panel textarea,
+.app.light-mode .nexa-pro-feature,
+.app.light-mode .nexa-pro-status {
+  background: #f5f5fb;
+  color: #20233b;
+  border-color: #dfe1ed;
+}
+
+.app.light-mode .nexa-help-card p,
+.app.light-mode .nexa-help-status small,
+.app.light-mode .nexa-pro-status small {
+  color: #626780;
+}
+
+.app.light-mode .nexa-accent-choice {
+  background: #f5f5fb;
+  color: #20233b;
+  border-color: #dfe1ed;
+}
+
+.app.light-mode .attachment-item {
+  background: var(--nexa-accent-soft, rgba(139, 92, 246, .10));
+  border-color: #e2deef;
+  color: #30344d;
+}
+
+/* Font-size preference */
+.app[data-font-size="small"] .message-content { font-size: 13px; }
+.app[data-font-size="medium"] .message-content { font-size: 14px; }
+.app[data-font-size="large"] .message-content { font-size: 16px; }
+
+/* Smooth, restrained scrollbar treatment */
+.app * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(139, 92, 246, .42) transparent;
+}
+
+.app *::-webkit-scrollbar { width: 7px; height: 7px; }
+.app *::-webkit-scrollbar-track { background: transparent; }
+.app *::-webkit-scrollbar-thumb {
+  border-radius: 20px;
+  background: rgba(139, 92, 246, .30);
+}
+.app *::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 92, 246, .52);
+}
+
+/* Mobile spacing */
+@media (max-width: 760px) {
+  .nexa-welcome-user { margin-bottom: 10px; font-size: 13px; }
+  .nexa-accent-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
 }
