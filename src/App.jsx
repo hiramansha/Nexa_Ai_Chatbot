@@ -91,20 +91,6 @@ function readChats() {
   }
 }
 
-function demoReply(prompt) {
-  const text = prompt.toLowerCase();
-
-  if (text.includes("javascript") || text.includes("code")) {
-    return "Let's break it down step by step.\n\n1. **Understand the goal:** Identify what the code should accomplish.\n2. **Divide the problem:** Separate it into smaller, manageable tasks.\n3. **Write the logic:** Use variables, functions, and conditions as needed.\n4. **Test the result:** Try different inputs and handle possible errors.\n\nShare your code with me to get a more specific explanation.";
-  }
-
-  if (text.includes("trip") || text.includes("travel") || text.includes("lahore")) {
-    return "Here's a simple way to organise your trip:\n\n**Day 1:** Explore the historic city centre.\n\n**Day 2:** Visit cultural landmarks and local markets.\n\n**Day 3:** Discover museums, gardens, and local food.\n\n**Day 4:** Explore a new neighbourhood and enjoy local experiences.\n\n**Day 5:** Keep the day flexible for shopping and your return journey.";
-  }
-
-  return `Great question! Let's work through this together.\n\n**Your question:** ${prompt}\n\n1. **Define your goal** — decide what you want to achieve.\n2. **Explore your options** — consider a few different approaches.\n3. **Create a plan** — break the next steps into manageable tasks.\n4. **Review and improve** — test your ideas and refine the result.`;
-}
-
 function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -197,6 +183,18 @@ async function readTextFile(file) {
   }
 }
 
+function buildAssistantInstructions(responseLanguage, detailedMode) {
+  const languageInstruction = responseLanguage === "english"
+    ? "Reply in clear, natural English."
+    : responseLanguage === "roman-urdu"
+      ? "Reply in Roman Urdu using the Latin alphabet. Do not use Urdu script unless the user explicitly asks for it."
+      : "Reply in the same language and writing style as the user's latest message. If the user writes in Urdu script, reply in Urdu script; if the user writes Roman Urdu, reply in Roman Urdu; if English, reply in English. For mixed-language messages, naturally match the user's mix.";
+  const detailInstruction = detailedMode
+    ? "Use a careful, detailed approach. Explain important steps clearly, include practical examples where useful, and mention assumptions. Do not claim to perform hidden tools or actions."
+    : "Be helpful and clear. Keep the answer reasonably concise unless the user asks for detail.";
+  return `${languageInstruction} ${detailInstruction}`;
+}
+
 function getMessageText(content) {
   if (typeof content === "string") return content;
 
@@ -271,6 +269,7 @@ function ChatDashboard() {
     });
   }
   const [thinking, setThinking] = useState(false);
+  const [detailedMode, setDetailedMode] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
   const [notice, setNotice] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
@@ -526,13 +525,11 @@ function ChatDashboard() {
   }
 
   function removeSelectedImage(id) {
-    setSelectedImages((previous) => {
-      const image = previous.find((item) => item.id === id);
-
-      if (image) URL.revokeObjectURL(image.preview);
-
-      return previous.filter((item) => item.id !== id);
-    });
+    const image = selectedImagesRef.current.find((item) => item.id === id);
+    if (image) URL.revokeObjectURL(image.preview);
+    const nextImages = selectedImagesRef.current.filter((item) => item.id !== id);
+    selectedImagesRef.current = nextImages;
+    setSelectedImages(nextImages);
   }
 
   async function copyMessage(messageOrText, id) {
@@ -638,6 +635,10 @@ function ChatDashboard() {
       ];
 
       const apiMessages = [
+        {
+          role: "system",
+          content: buildAssistantInstructions(preferences.responseLanguage, detailedMode)
+        },
         ...previousMessages.slice(-18).map((message) => ({
           role: message.role,
           content: getMessageText(message.content)
@@ -720,7 +721,13 @@ function ChatDashboard() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          messages: history
+          messages: [
+            {
+              role: "system",
+              content: buildAssistantInstructions(preferences.responseLanguage, detailedMode)
+            },
+            ...history
+          ]
         })
       });
 
@@ -775,7 +782,7 @@ function ChatDashboard() {
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = "en-US";
+    recognition.lang = preferences.responseLanguage === "roman-urdu" ? "ur-PK" : "en-US";
     recognition.interimResults = false;
     recognition.continuous = false;
 
@@ -1015,7 +1022,7 @@ function ChatDashboard() {
             <div className="nexa-settings-section">
               <h3>Frequently Asked Questions</h3>
               <details className="nexa-help-card"><summary>Why is Nexa AI not responding?</summary><p>Check your internet connection, then use “Check status” above. If the service is online but chat still fails, refresh the page and try a new chat.</p></details>
-              <details className="nexa-help-card"><summary>How do I save my conversations?</summary><p>Conversation history is saved in this browser. Clearing browser site data or using another browser/device may remove or hide this local history.</p></details>
+              <details className="nexa-help-card"><summary>How do I save my conversations?</summary><p>Conversation history is saved in this browser on this device. It is not synced to your Supabase account yet. Clearing browser site data or using another browser/device may remove or hide this local history.</p></details>
               <details className="nexa-help-card"><summary>Which files can I attach?</summary><p>You can attach supported text documents such as TXT, Markdown, CSV, JSON and text-based PDF files. Images can also be attached in JPG, PNG or WEBP format, subject to the size limits shown by the app.</p></details>
               <details className="nexa-help-card"><summary>How do I change the language or appearance?</summary><p>Open Settings in the sidebar to choose Dark or Light theme, message font size, preferred response language and Enter-to-send behavior.</p></details>
               <details className="nexa-help-card"><summary>Why is voice input unavailable?</summary><p>Use a supported browser such as Chrome or Edge, allow microphone permission for this site, and check that your microphone is connected.</p></details>
@@ -1282,7 +1289,7 @@ function ChatDashboard() {
 
               <div className="profile">
                 <div className="avatar">
-                  {(currentUser?.user_metadata?.full_name || currentUser?.email || "N").charAt(0).toUpperCase()}
+                  {displayName.charAt(0).toUpperCase()}
                 </div>
 
                 <div style={{ minWidth: 0 }}>
@@ -1684,14 +1691,16 @@ function ChatDashboard() {
 
                   <button
                     type="button"
-                    className={`tool-pill ${thinking ? "selected" : ""}`}
-                    onClick={() =>
-                      setNotice(
-                        "Thinking mode uses the configured AI model."
-                      )
-                    }
+                    className={`tool-pill ${detailedMode ? "selected" : ""}`}
+                    aria-pressed={detailedMode}
+                    title="Ask Nexa for more detailed, step-by-step answers"
+                    onClick={() => {
+                      setDetailedMode((enabled) => !enabled);
+                      setNotice(detailedMode ? "Detailed answers turned off." : "Detailed answers enabled for your next message.");
+                    }}
+                    disabled={thinking}
                   >
-                    <Brain size={16} /> Thinking
+                    <Brain size={16} /> {detailedMode ? "Detailed On" : "Detailed"}
                   </button>
                 </div>
 
