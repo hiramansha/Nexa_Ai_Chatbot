@@ -394,9 +394,8 @@ ${question}
         );
 
         result = await env.AI.run(imageModel, {
-          image: imageBytes,
-          question: languageInstructions,
-          task: "query",
+          image: [...imageBytes],
+          prompt: languageInstructions,
           max_tokens: 1024
         });
       } else {
