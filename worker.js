@@ -23,7 +23,7 @@ export default {
 
     const corsHeaders = {
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
       "Vary": "Origin"
     };
 
@@ -81,6 +81,36 @@ export default {
 
     if (!originAllowed) {
       return json({ error: "Origin not allowed." }, 403);
+    }
+
+    if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
+      return json({ error: "Authentication service is not configured." }, 500);
+    }
+
+    const authorization = request.headers.get("Authorization") || "";
+    const token = authorization.match(/^Bearer\s+(.+)$/i)?.[1];
+
+    if (!token) {
+      return json({ error: "Please sign in to use Nexa AI." }, 401);
+    }
+
+    try {
+      const authResponse = await fetch(
+        `${env.SUPABASE_URL.replace(/\/+$/, "")}/auth/v1/user`,
+        {
+          headers: {
+            apikey: env.SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!authResponse.ok) {
+        return json({ error: "Your session is invalid or expired. Please sign in again." }, 401);
+      }
+    } catch (error) {
+      console.error("Supabase verification error:", error);
+      return json({ error: "Unable to verify your session. Please try again." }, 503);
     }
 
     if (!env.AI) {
