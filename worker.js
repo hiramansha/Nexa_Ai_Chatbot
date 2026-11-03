@@ -4,9 +4,22 @@ export default {
     const url = new URL(request.url);
     const origin = request.headers.get("Origin") || "";
 
-    const allowedOrigin = (env.FRONTEND_URL || "")
-      .trim()
-      .replace(/\/+$/, "");
+    // Allowed frontend origins
+    const allowedOrigins = new Set(
+      [
+        env.FRONTEND_URL,
+        ...(env.FRONTEND_URLS || "").split(","),
+        "https://nexa-ai-chatbot-sigma.vercel.app",
+        "https://nexa-ai-chatbot-git-main-hira10.vercel.app",
+        "http://localhost:5173"
+      ]
+        .map((value) => (value || "").trim().replace(/\/+$/, ""))
+        .filter(Boolean)
+    );
+
+    const originAllowed = origin
+      ? allowedOrigins.has(origin.replace(/\/+$/, ""))
+      : false;
 
     const corsHeaders = {
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -14,7 +27,7 @@ export default {
       "Vary": "Origin"
     };
 
-    if (origin && origin === allowedOrigin) {
+    if (originAllowed) {
       corsHeaders["Access-Control-Allow-Origin"] = origin;
     }
 
@@ -27,8 +40,9 @@ export default {
         }
       });
 
+    // CORS preflight
     if (request.method === "OPTIONS") {
-      if (!origin || origin !== allowedOrigin) {
+      if (!originAllowed) {
         return json({ error: "Origin not allowed." }, 403);
       }
 
@@ -38,22 +52,21 @@ export default {
       });
     }
 
-    if (
-      url.pathname === "/api/health" &&
-      request.method === "GET"
-    ) {
+    // Health check
+    if (url.pathname === "/api/health" && request.method === "GET") {
       return json({
         success: true,
         status: "ok",
         provider: "Cloudflare Workers AI",
         aiBindingAvailable: Boolean(env.AI),
-        frontendConfigured: Boolean(allowedOrigin),
+        frontendConfigured: allowedOrigins.size > 0,
         imageSupport: true,
-        imageModel: "@cf/moondream/moondream3.1-9B-A2B",
-        textModel: "@cf/meta/llama-3.1-8b-instruct-fast"
+        textModel: "@cf/meta/llama-3.1-8b-instruct-fast",
+        imageModel: "@cf/moondream/moondream3.1-9B-A2B"
       });
     }
 
+    // Unknown routes
     if (url.pathname !== "/api/chat") {
       if (env.ASSETS) {
         return env.ASSETS.fetch(request);
@@ -66,16 +79,17 @@ export default {
       return json({ error: "Method not allowed." }, 405);
     }
 
-    if (!origin || origin !== allowedOrigin) {
+    if (!originAllowed) {
       return json({ error: "Origin not allowed." }, 403);
     }
 
     if (!env.AI) {
       return json({
-        error: "Cloudflare AI binding is missing."
+        error: "Cloudflare Workers AI binding is missing."
       }, 500);
     }
 
+    // Read request body
     let body;
 
     try {
@@ -105,12 +119,15 @@ export default {
       return json({ error: "Invalid messages." }, 400);
     }
 
-    let containsImage = false;
-    let imageDataUri = "";
-    let imageCount = 0;
     let invalidMessage = false;
+    let imageDataUri = "";
+    let containsImage = false;
 
-    const safeMessages = messages.slice(-20).map((message) => {
+    // Validate and prepare recent conversation messages.
+    // Images from older messages are not sent again.
+    const recentMessages = messages.slice(-20);
+
+    const safeMessages = recentMessages.map((message, index) => {
       if (
         !message ||
         !["user", "assistant"].includes(message.role)
@@ -144,59 +161,77 @@ export default {
         return null;
       }
 
-      const parts = message.content.map((part) => {
+      const parts = [];
+
+      for (const part of message.content) {
         if (
           part?.type === "text" &&
           typeof part.text === "string" &&
           part.text.length <= 12000
         ) {
-          return {
-            type: "text",
-            text: part.text
-          };
+          if (part.text.trim()) {
+            parts.push({
+              type: "text",
+              text: part.text
+            });
+          }
+
+          continue;
         }
 
         if (
           part?.type === "image_url" &&
           typeof part.image_url?.url === "string"
         ) {
+          // Only the latest message's image is analyzed.
+          if (index !== recentMessages.length - 1) {
+            continue;
+          }
+
           const dataUri = part.image_url.url;
 
           const match = dataUri.match(
             /^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=\s]+)$/i
           );
 
-          if (
-            !match ||
-            dataUri.length > 5_500_000 ||
-            imageCount >= 1
-          ) {
+          if (!match || dataUri.length > 5_500_000 || containsImage) {
             invalidMessage = true;
-            return null;
+            continue;
           }
 
-          imageCount++;
           containsImage = true;
-          imageDataUri = dataUri;
+          imageDataUri = match[2].replace(/\s/g, "");
 
-          return {
-            type: "image_url",
-            image_url: { url: dataUri }
-          };
+          continue;
         }
 
         invalidMessage = true;
-        return null;
-      });
+      }
 
-      if (parts.some((part) => part === null)) {
+      if (invalidMessage) {
+        return null;
+      }
+
+      const textContent = parts
+        .filter((part) => part.type === "text")
+        .map((part) => part.text)
+        .join("\n");
+
+      if (containsImage && index === recentMessages.length - 1) {
+        return {
+          role: "user",
+          content: textContent || "Please analyze this image."
+        };
+      }
+
+      if (!textContent.trim()) {
         invalidMessage = true;
         return null;
       }
 
       return {
         role: message.role,
-        content: parts
+        content: textContent
       };
     });
 
@@ -205,17 +240,23 @@ export default {
       safeMessages.some((message) => message === null)
     ) {
       return json({
-        error: "Invalid message or attachment format. Only one image can be analyzed per request."
+        error: "Invalid message or attachment format. Please check your message and image."
       }, 400);
     }
 
+    const latestMessage = safeMessages[safeMessages.length - 1];
+
+    if (!latestMessage || latestMessage.role !== "user") {
+      return json({ error: "The latest message must be from the user." }, 400);
+    }
+
+    // Nexa AI system instructions
     const systemMessage = {
       role: "system",
       content: `
-
 You are Nexa AI, a helpful, intelligent, accurate and multilingual AI assistant.
 
-YOUR PERSONALITY:
+PERSONALITY:
 - Be friendly, natural, respectful and professional.
 - Answer the user's actual question directly.
 - Explain difficult topics in simple words.
@@ -223,102 +264,61 @@ YOUR PERSONALITY:
 - Use conversation history when relevant.
 - Avoid unnecessary repetition.
 - Never invent facts, statistics or sources.
-- If information is uncertain, clearly say so.
-- Do not claim that AI thinks or feels exactly like a human.
+- Clearly state uncertainty when information is uncertain.
 
 LANGUAGE RULES:
 
-1. ENGLISH:
+1. English:
 - If the user writes in English, reply in natural English.
-- If the user explicitly requests English, use English.
+- If the user requests English, use English.
 
-2. PAKISTANI ROMAN URDU:
-- If the user writes in Roman Urdu, reply in Roman Urdu.
-- If the user asks "Urdu mein samjhao", "Urdu mein batao",
-  "Pakistan wali Urdu", or similar, ALWAYS use Pakistani Roman Urdu.
-- Write Urdu using English alphabets only.
-- Never use Urdu script or Devanagari script.
+2. Pakistani Roman Urdu:
+- If the user writes in Roman Urdu, reply in Pakistani Roman Urdu.
+- Use English alphabets only.
+- Never use Urdu script or Hindi/Devanagari script.
 - Never respond in Hindi.
 - Use natural Pakistani conversational language.
 
-3. NATURAL WRITING STYLE:
-- Write like a Pakistani person chatting naturally on WhatsApp.
-- Prefer everyday words such as:
-  "hai", "aik", "kaise", "kyun", "samajhna",
-  "seekhna", "madad", "kar sakte hain".
-- Avoid unnecessarily formal or Hindi-influenced vocabulary.
-- Avoid awkward translations.
+3. Mixed language:
+- Match the user's English and Roman Urdu writing style.
 - Keep technical terms in English when appropriate.
-- Explain technical terms in simple Roman Urdu.
+- Explain difficult technical terms simply.
 
-Examples:
-"Artificial Intelligence aik technology hai."
-"Yeh computers ko data se seekhne mein madad karti hai."
-"Iska use education, healthcare aur business mein hota hai."
-"AI insan ki tarah feelings nahi rakhti."
-
-4. MIXED LANGUAGE:
-- If the user mixes English and Roman Urdu,
-  naturally match their writing style.
-- Do not force every technical word into Urdu.
-- Keep the explanation easy to understand.
-
-5. FOLLOW-UP LANGUAGE:
+4. Follow-up instructions:
 - Follow the latest language instruction.
-- If the user asks for Urdu and then says "aur asaan karo",
-  continue in Pakistani Roman Urdu.
-- If the user says "English mein", switch to English.
-- If the user says "message form mein", write a natural message.
-- Do not randomly change language during a conversation.
+- If the user asks for Urdu and then says "make it easier", continue in Roman Urdu.
+- If the user asks for English, switch to English.
+- Follow requested length and format.
 
-6. RESPONSE FORMATTING:
+5. Formatting:
 - Use normal paragraphs for conversational replies.
-- Use bullet points when they genuinely improve clarity.
+- Use bullets when useful.
 - Use headings only when needed.
-- Do not show raw Markdown symbols.
-- Follow the requested length and format.
 - Do not make simple answers unnecessarily long.
 
-7. ACCURACY:
-- Give clear and reliable information.
-- Do not invent facts about Pakistani organisations,
-  companies, institutions or government departments.
-- Clearly distinguish examples from verified facts.
+6. Accuracy:
+- Do not invent facts about organisations, companies or institutions.
+- Distinguish examples from verified facts.
 - Admit uncertainty when necessary.
 
-8. CONVERSATION CONTEXT:
-- Remember relevant details from the current conversation.
-- Understand follow-up questions using previous messages.
-- Never make unsupported assumptions about the user.
-- Ask for clarification when essential information is missing.
-- Do not claim to remember information from previous chats
-  unless that information is actually available.
-
-9. IMAGE AND FILE RULES:
-- Only describe images that are actually attached.
-- If no image is attached, ask the user to upload it.
-- Only summarize files whose content is available.
+7. Images and files:
+- Only describe images actually provided.
 - Never pretend to have read an unavailable file.
-- If a file cannot be read, explain the limitation.
-- Clearly distinguish visible image details from assumptions.
+- Clearly distinguish visible details from assumptions.
 
-10. GREETINGS:
+8. Greetings:
 - If the user says only "Assalam o Alaikum",
   reply "Wa Alaikum Assalam".
 - Respond naturally to greetings and thanks.
 
-FINAL REQUIREMENT:
-When Urdu is requested, always respond in Pakistani Roman Urdu
-using English alphabets, just like normal Pakistani messages.
-Never use Urdu script or Hindi script for these requests.
+FINAL RULE:
+When Urdu is requested, always use Pakistani Roman Urdu
+with English alphabets only.
 `
     };
 
-    const textModel =
-      "@cf/meta/llama-3.1-8b-instruct-fast";
-
-    const imageModel =
-      "@cf/moondream/moondream3.1-9B-A2B";
+    const textModel = "@cf/meta/llama-3.1-8b-instruct-fast";
+    const imageModel = "@cf/moondream/moondream3.1-9B-A2B";
 
     try {
       let result;
@@ -327,50 +327,34 @@ Never use Urdu script or Hindi script for these requests.
       if (containsImage) {
         model = imageModel;
 
-        const latestMessage = safeMessages[safeMessages.length - 1];
-
-        let question = "";
-
-        if (typeof latestMessage.content === "string") {
-          question = latestMessage.content.trim();
-        } else if (Array.isArray(latestMessage.content)) {
-          question = latestMessage.content
-            .filter(
-              (part) =>
-                part?.type === "text" &&
-                typeof part.text === "string"
-            )
-            .map((part) => part.text.trim())
-            .filter(Boolean)
-            .join("\n");
-        }
-
-        if (!question) {
-          question =
-            "Describe this image and explain its visible content.";
-        }
+        const question = latestMessage.content.trim() ||
+          "Describe this image and explain its visible content.";
 
         const languageInstructions = `
-IMPORTANT RESPONSE LANGUAGE INSTRUCTIONS:
-- Read the user's question carefully.
-- If the user asks in Urdu or Roman Urdu, answer in Pakistani Roman Urdu using English alphabets only.
+Read the user's question carefully.
+
+- If the question is in English, answer in English.
+- If the question is in Roman Urdu, answer in Pakistani Roman Urdu using English alphabets only.
 - Never use Urdu script or Hindi/Devanagari script.
-- If the user asks in English, answer in English.
 - If the user mixes English and Roman Urdu, match that style.
-- Keep the image description accurate and concise.
-- Do not guess details that are not visible in the image.
+- Describe only what is visible.
+- Do not invent details.
+- Keep the answer clear and useful.
 
 User's question:
 ${question}
 `;
 
+        const imageBytes = Uint8Array.from(
+          atob(imageDataUri),
+          (character) => character.charCodeAt(0)
+        );
+
         result = await env.AI.run(imageModel, {
-          task: "query",
-          image: imageDataUri,
+          image: imageBytes,
           question: languageInstructions,
-          reasoning: false,
-          max_tokens: 1024,
-          stream: false
+          task: "query",
+          max_tokens: 1024
         });
       } else {
         model = textModel;
@@ -385,32 +369,28 @@ ${question}
       }
 
       console.log("AI model:", model);
-      console.log("AI output type:", typeof result);
-      console.log(
-        "AI output:",
-        JSON.stringify(result ?? null)
-      );
+      console.log("AI output:", JSON.stringify(result ?? null));
 
       const reply =
-        typeof result?.answer === "string"
-          ? result.answer.trim()
-          : typeof result?.response === "string"
-            ? result.response.trim()
-            : typeof result?.description === "string"
-              ? result.description.trim()
-              : typeof result?.caption === "string"
-                ? result.caption.trim()
-                : typeof result?.result?.answer === "string"
-                  ? result.result.answer.trim()
-                  : "";
+        typeof result === "string"
+          ? result.trim()
+          : typeof result?.answer === "string"
+            ? result.answer.trim()
+            : typeof result?.response === "string"
+              ? result.response.trim()
+              : typeof result?.description === "string"
+                ? result.description.trim()
+                : typeof result?.caption === "string"
+                  ? result.caption.trim()
+                  : typeof result?.result?.answer === "string"
+                    ? result.result.answer.trim()
+                    : "";
 
       if (!reply) {
-        console.error(
-          "AI returned an empty or unexpected response."
-        );
+        console.error("AI returned an empty or unexpected response.");
 
         return json({
-          error: "The AI model returned an empty response. Please check the Cloudflare Worker logs."
+          error: "The AI model returned an empty response. Please try again."
         }, 502);
       }
 
@@ -429,7 +409,7 @@ ${question}
 
       return json({
         error: containsImage
-          ? "Image analysis failed. Check the vision model availability and input format."
+          ? "Image analysis failed. Please try another image."
           : "Cloudflare Workers AI request failed.",
         details
       }, 502);
