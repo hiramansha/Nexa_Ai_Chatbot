@@ -111,9 +111,13 @@ function makeId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function makeChatId() {
+  return crypto.randomUUID();
+}
+
 function makeChat() {
   return {
-    id: makeId(),
+    id: makeChatId(),
     title: "New conversation",
     updatedAt: Date.now(),
     messages: []
@@ -261,11 +265,7 @@ function buildAssistantInstructions(
   detailedMode
 ) {
   const languageInstruction =
-    responseLanguage === "english"
-      ? "Respond in clear, natural English."
-      : responseLanguage === "roman-urdu"
-        ? "Respond in Roman Urdu using the Latin alphabet. Do not use Urdu script unless explicitly requested."
-        : "Match the language and writing style of the user's latest message. Use English for English, Roman Urdu for Roman Urdu, and Urdu script for Urdu script. For mixed-language messages, naturally match the user's style.";
+    "Automatically identify the language and writing style of the user's latest message. If the user writes in English, respond entirely in clear, natural English. If the user writes Urdu using English/Latin letters (Roman Urdu), understand it as Urdu and respond in proper Urdu script (اردو رسم الخط), never in Roman Urdu. If the user writes in Urdu script, respond in Urdu script. If the user naturally mixes English and Urdu, respond in a similar natural mix, writing Urdu words in Urdu script and English words in English. Never use Roman Urdu in your response. Understand informal wording, spelling mistakes and typing errors from context, and respond with correct spelling, grammar and natural conversational phrasing. Do not change the language just because the user's message contains a few English or Urdu words.";
 
   const detailInstruction = detailedMode
     ? "Give a detailed, step-by-step answer. Explain important points clearly and include practical examples where useful."
@@ -308,6 +308,7 @@ function ChatDashboard() {
   const [copiedId, setCopiedId] = useState(null);
   const [notice, setNotice] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
+  const [chatSyncReady, setChatSyncReady] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [selectedImages, setSelectedImages] = useState([]);
@@ -456,16 +457,124 @@ function ChatDashboard() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(chats)
-      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(chats));
     } catch {
-      setNotice(
-        "Chat history could not be saved. Browser storage may be full."
-      );
+      setNotice("Chat history could not be saved in this browser.");
     }
   }, [chats]);
+
+  // Load this user's cloud history and safely migrate older browser chats.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCloudChats() {
+      setChatSyncReady(false);
+
+      if (!currentUser?.id) return;
+
+      const localChats = readChats();
+
+      const { data, error } = await supabase
+        .from("chats")
+        .select("*")
+        .eq("user_id", currentUser.id)
+        .order("updated_at", { ascending: false });
+
+      if (error) {
+        if (!cancelled) {
+          setNotice(`Could not load cloud history: ${error.message}`);
+        }
+        return;
+      }
+
+      const isUuid = (value) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || "");
+
+      const migratedLocal = localChats.map((chat) => ({
+        ...chat,
+        id: isUuid(chat.id) ? chat.id : makeChatId(),
+        messages: Array.isArray(chat.messages) ? chat.messages : []
+      }));
+
+      const cloudChats = (data || []).map((row) => ({
+        id: row.id,
+        title: row.title || "New conversation",
+        updatedAt: row.updated_at ? Date.parse(row.updated_at) : Date.now(),
+        messages: Array.isArray(row.messages) ? row.messages : []
+      }));
+
+      const cloudIds = new Set(cloudChats.map((chat) => chat.id));
+      const merged = [
+        ...cloudChats,
+        ...migratedLocal.filter((chat) => !cloudIds.has(chat.id))
+      ].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+      if (cancelled) return;
+
+      setChats(merged);
+
+      if (activeId) {
+        const oldIndex = localChats.findIndex((chat) => chat.id === activeId);
+        if (oldIndex >= 0 && migratedLocal[oldIndex]) {
+          setActiveId(migratedLocal[oldIndex].id);
+        }
+      }
+
+      if (migratedLocal.length) {
+        const rowsToMigrate = migratedLocal
+          .filter((chat) => !cloudIds.has(chat.id))
+          .map((chat) => ({
+            id: chat.id,
+            user_id: currentUser.id,
+            title: chat.title || "New conversation",
+            messages: chat.messages,
+            created_at: new Date(chat.updatedAt || Date.now()).toISOString(),
+            updated_at: new Date(chat.updatedAt || Date.now()).toISOString()
+          }));
+
+        if (rowsToMigrate.length) {
+          const { error: migrationError } = await supabase
+            .from("chats")
+            .upsert(rowsToMigrate, { onConflict: "id" });
+
+          if (migrationError && !cancelled) {
+            setNotice(`Some previous chats could not be migrated: ${migrationError.message}`);
+          }
+        }
+      }
+
+      if (!cancelled) setChatSyncReady(true);
+    }
+
+    loadCloudChats();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id]);
+
+  // Keep cloud history updated whenever conversations change.
+  useEffect(() => {
+    if (!chatSyncReady || !currentUser?.id) return;
+
+    const rows = chats.map((chat) => ({
+      id: chat.id,
+      user_id: currentUser.id,
+      title: chat.title || "New conversation",
+      messages: Array.isArray(chat.messages) ? chat.messages : [],
+      created_at: new Date(chat.updatedAt || Date.now()).toISOString(),
+      updated_at: new Date(chat.updatedAt || Date.now()).toISOString()
+    }));
+
+    if (rows.length) {
+      supabase
+        .from("chats")
+        .upsert(rows, { onConflict: "id" })
+        .then(({ error }) => {
+          if (error) console.error("Cloud chat save failed:", error.message);
+        });
+    }
+  }, [chats, chatSyncReady, currentUser?.id]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
@@ -541,7 +650,20 @@ function ChatDashboard() {
     setNotice("");
   }
 
-  function deleteChat(id) {
+  async function deleteChat(id) {
+    if (currentUser?.id && chatSyncReady) {
+      const { error } = await supabase
+        .from("chats")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", currentUser.id);
+
+      if (error) {
+        setNotice(`Cloud delete failed: ${error.message}`);
+        return;
+      }
+    }
+
     setChats((previous) =>
       previous.filter((chat) => chat.id !== id)
     );
@@ -574,7 +696,8 @@ function ChatDashboard() {
     if (nextTitle?.trim()) {
       updateChat(id, (item) => ({
         ...item,
-        title: nextTitle.trim().slice(0, 100)
+        title: nextTitle.trim().slice(0, 100),
+        updatedAt: Date.now()
       }));
     }
   }
@@ -810,7 +933,7 @@ function ChatDashboard() {
     setInput("");
     setNotice("");
 
-    const chatId = activeId || makeId();
+    const chatId = activeId || makeChatId();
 
     const existingChat = chats.find(
       (chat) => chat.id === chatId

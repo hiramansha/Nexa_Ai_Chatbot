@@ -273,20 +273,20 @@ LANGUAGE RULES:
 - If the user requests English, use English.
 
 2. Pakistani Roman Urdu:
-- If the user writes in Roman Urdu, reply in Pakistani Roman Urdu.
-- Use English alphabets only.
-- Never use Urdu script or Hindi/Devanagari script.
-- Never respond in Hindi.
-- Use natural Pakistani conversational language.
+- If the user writes in Roman Urdu, understand it as Urdu and reply in proper Urdu script.
+- Never reply in Roman Urdu.
+- If the user writes in Urdu script, reply in natural Urdu script.
+- Use correct Pakistani Urdu vocabulary, spelling and grammar.
+- Never use Hindi or Devanagari script.
 
 3. Mixed language:
-- Match the user's English and Roman Urdu writing style.
+- If the user mixes English and Urdu, use a natural mix of English and Urdu script.
+- Write Urdu words in Urdu script and English words in English.
 - Keep technical terms in English when appropriate.
-- Explain difficult technical terms simply.
 
 4. Follow-up instructions:
 - Follow the latest language instruction.
-- If the user asks for Urdu and then says "make it easier", continue in Roman Urdu.
+- If the user asks for Urdu and then says "make it easier", continue in Urdu script.
 - If the user asks for English, switch to English.
 - Follow requested length and format.
 
@@ -312,8 +312,11 @@ LANGUAGE RULES:
 - Respond naturally to greetings and thanks.
 
 FINAL RULE:
-When Urdu is requested, always use Pakistani Roman Urdu
-with English alphabets only.
+Roman Urdu input means Urdu script output.
+English input means English output.
+Urdu script input means Urdu script output.
+Mixed input means natural English and Urdu script.
+Never use Roman Urdu in responses.
 `
     };
 
@@ -334,9 +337,12 @@ with English alphabets only.
 Read the user's question carefully.
 
 - If the question is in English, answer in English.
-- If the question is in Roman Urdu, answer in Pakistani Roman Urdu using English alphabets only.
-- Never use Urdu script or Hindi/Devanagari script.
-- If the user mixes English and Roman Urdu, match that style.
+- If the question is in Roman Urdu, understand it as Urdu and answer in proper Urdu script.
+- If the question is in Urdu script, answer in natural Urdu script.
+- Never answer in Roman Urdu.
+- Never use Hindi or Devanagari script.
+- If the user mixes English and Urdu, use a natural mix of English and Urdu script.
+- Use correct spelling and natural grammar.
 - Describe only what is visible.
 - Do not invent details.
 - Keep the answer clear and useful.
