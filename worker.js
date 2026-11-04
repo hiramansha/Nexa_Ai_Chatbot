@@ -83,15 +83,21 @@ export default {
       return json({ error: "Origin not allowed." }, 403);
     }
 
+    // Supabase configuration
     if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
-      return json({ error: "Authentication service is not configured." }, 500);
+      return json({
+        error: "Authentication service is not configured."
+      }, 500);
     }
 
+    // Verify authentication
     const authorization = request.headers.get("Authorization") || "";
     const token = authorization.match(/^Bearer\s+(.+)$/i)?.[1];
 
     if (!token) {
-      return json({ error: "Please sign in to use Nexa AI." }, 401);
+      return json({
+        error: "Please sign in to use Nexa AI."
+      }, 401);
     }
 
     try {
@@ -106,13 +112,19 @@ export default {
       );
 
       if (!authResponse.ok) {
-        return json({ error: "Your session is invalid or expired. Please sign in again." }, 401);
+        return json({
+          error: "Your session is invalid or expired. Please sign in again."
+        }, 401);
       }
     } catch (error) {
       console.error("Supabase verification error:", error);
-      return json({ error: "Unable to verify your session. Please try again." }, 503);
+
+      return json({
+        error: "Unable to verify your session. Please try again."
+      }, 503);
     }
 
+    // Cloudflare AI binding
     if (!env.AI) {
       return json({
         error: "Cloudflare Workers AI binding is missing."
@@ -149,12 +161,11 @@ export default {
       return json({ error: "Invalid messages." }, 400);
     }
 
+    // Image and message validation
     let invalidMessage = false;
     let imageDataUri = "";
     let containsImage = false;
 
-    // Validate and prepare recent conversation messages.
-    // Images from older messages are not sent again.
     const recentMessages = messages.slice(-20);
 
     const safeMessages = recentMessages.map((message, index) => {
@@ -166,6 +177,7 @@ export default {
         return null;
       }
 
+      // Normal text messages
       if (typeof message.content === "string") {
         if (
           !message.content.trim() ||
@@ -181,6 +193,7 @@ export default {
         };
       }
 
+      // Image messages
       if (
         message.role !== "user" ||
         !Array.isArray(message.content) ||
@@ -213,7 +226,7 @@ export default {
           part?.type === "image_url" &&
           typeof part.image_url?.url === "string"
         ) {
-          // Only the latest message's image is analyzed.
+          // Only analyze the latest message's image
           if (index !== recentMessages.length - 1) {
             continue;
           }
@@ -224,13 +237,20 @@ export default {
             /^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=\s]+)$/i
           );
 
-          if (!match || dataUri.length > 5_500_000 || containsImage) {
+          if (
+            !match ||
+            dataUri.length > 5_500_000 ||
+            containsImage
+          ) {
             invalidMessage = true;
             continue;
           }
 
           containsImage = true;
-          imageDataUri = match[2].replace(/\s/g, "");
+
+          // IMPORTANT:
+          // Preserve the complete base64 data URI.
+          imageDataUri = dataUri;
 
           continue;
         }
@@ -277,7 +297,9 @@ export default {
     const latestMessage = safeMessages[safeMessages.length - 1];
 
     if (!latestMessage || latestMessage.role !== "user") {
-      return json({ error: "The latest message must be from the user." }, 400);
+      return json({
+        error: "The latest message must be from the user."
+      }, 400);
     }
 
     // Nexa AI system instructions
@@ -357,6 +379,7 @@ Never use Roman Urdu in responses.
 `
     };
 
+    // AI models
     const textModel = "@cf/meta/llama-3.1-8b-instruct-fast";
     const imageModel = "@cf/moondream/moondream3.1-9B-A2B";
 
@@ -364,6 +387,7 @@ Never use Roman Urdu in responses.
       let result;
       let model;
 
+      // IMAGE ANALYSIS
       if (containsImage) {
         model = imageModel;
 
@@ -371,34 +395,43 @@ Never use Roman Urdu in responses.
           "Describe this image and explain its visible content.";
 
         const languageInstructions = `
-Read the user's question carefully.
+Read and analyze the provided image carefully.
 
-- If the question is in English, answer in English.
-- If the question is in Roman Urdu, understand it as Urdu and answer in proper Urdu script.
-- If the question is in Urdu script, answer in natural Urdu script.
-- Never answer in Roman Urdu.
+LANGUAGE RULES:
+- English question: answer in English.
+- Roman Urdu question: understand it as Urdu and answer in proper Urdu script.
+- Urdu script question: answer in natural Urdu script.
+- Mixed language: use natural English and Urdu script.
+- Never use Roman Urdu.
 - Never use Hindi or Devanagari script.
-- If the user mixes English and Urdu, use a natural mix of English and Urdu script.
-- Use correct spelling and natural grammar.
-- Describe only what is visible.
-- Do not invent details.
-- Keep the answer clear and useful.
+
+IMAGE ANALYSIS:
+- Describe only details visible in the image.
+- Read visible text when possible.
+- Explain diagrams, objects and screenshots clearly.
+- Do not invent missing information.
+- If something is unclear, mention it.
+- Give a useful and accurate answer.
 
 User's question:
 ${question}
 `;
 
-        const imageBytes = Uint8Array.from(
-          atob(imageDataUri),
-          (character) => character.charCodeAt(0)
-        );
+        if (!imageDataUri) {
+          return json({
+            error: "Image data is missing. Please upload the image again."
+          }, 400);
+        }
 
+        // Pass the complete base64 data URI to Moondream
         result = await env.AI.run(imageModel, {
-          image: [...imageBytes],
-          prompt: languageInstructions,
-          max_tokens: 1024
+          image: imageDataUri,
+          question: languageInstructions,
+          task: "query"
         });
+
       } else {
+        // NORMAL TEXT CHAT
         model = textModel;
 
         result = await env.AI.run(textModel, {
@@ -410,8 +443,8 @@ ${question}
         });
       }
 
+      // Extract AI response
       console.log("AI model:", model);
-      console.log("AI output:", JSON.stringify(result ?? null));
 
       const reply =
         typeof result === "string"
@@ -429,7 +462,10 @@ ${question}
                     : "";
 
       if (!reply) {
-        console.error("AI returned an empty or unexpected response.");
+        console.error(
+          "AI returned an empty or unexpected response:",
+          JSON.stringify(result ?? null)
+        );
 
         return json({
           error: "The AI model returned an empty response. Please try again."
@@ -441,6 +477,7 @@ ${question}
         reply,
         model
       });
+
     } catch (error) {
       const details =
         error instanceof Error
@@ -451,7 +488,7 @@ ${question}
 
       return json({
         error: containsImage
-          ? "Image analysis failed. Please try another image."
+          ? "Image analysis failed. Please check the image or try again later."
           : "Cloudflare Workers AI request failed.",
         details
       }, 502);
