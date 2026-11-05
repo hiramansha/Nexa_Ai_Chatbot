@@ -239,7 +239,7 @@ export default {
 
           if (
             !match ||
-            dataUri.length > 5_500_000 ||
+           dataUri.length > 6_000_000 ||
             containsImage
           ) {
             invalidMessage = true;
